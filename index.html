@@ -3053,9 +3053,18 @@ document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () 
   renderShop();
   Sound.click();
 }));
+let resetArmedAt = 0;
 $('resetBtn').addEventListener('click', () => {
-  if (!confirm('Start over? This clears your coins, recipes and upgrades.')) return;
+  const b = $('resetBtn');
+  // ask twice instead of using confirm(), which some embedded browsers block
+  if (Date.now() - resetArmedAt > 3000) {
+    resetArmedAt = Date.now();
+    b.textContent = 'Tap again to erase everything';
+    setTimeout(() => { if (Date.now() - resetArmedAt >= 3000) b.textContent = 'Reset progress'; }, 3100);
+    return;
+  }
   clearTimeout(saveTimer);
+  Object.assign(state, freshState());
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
   location.reload();
 });
