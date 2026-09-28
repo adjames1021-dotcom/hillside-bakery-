@@ -1,17 +1,3351 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hillside Bakery</title>
-  <style>
-    html, body {
-      margin: 0;
-      min-height: 100vh;
-      background-color: #F8E8C8;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Hillside Bakery</title>
+<meta name="description" content="A cozy little bakery game. Mix, bake and sell treats!">
+<meta name="theme-color" content="#F8E8C8">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍞</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+    "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+  }
+}
+</script>
+<style>
+  :root {
+    --cream: #FFF6E4;
+    --paper: #FFFBF2;
+    --orange: #F4A646;
+    --orange-2: #E0852B;
+    --ink: #4B2E1D;
+    --ink-soft: rgba(75, 46, 29, 0.72);
+    --green: #74B35A;
+    --red: #E0584C;
+    --gold: #F6C744;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background: radial-gradient(120% 90% at 50% 58%, #FFEFC6 0%, #F8E8C8 42%, #EFD6A6 100%);
+    font-family: 'Fredoka', ui-rounded, 'Arial Rounded MT Bold', system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+  }
+  #game { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; outline: none; }
+  #grain {
+    position: fixed; inset: 0; pointer-events: none; z-index: 2; opacity: .08; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .35 0 0 0 0 .22 0 0 0 0 .1 0 0 0 1.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  /* ---------- world-anchored labels ---------- */
+  #labels { position: fixed; inset: 0; pointer-events: none; z-index: 4; overflow: hidden; }
+  .anchor { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+  .bub {
+    position: absolute; left: 0; bottom: 10px; transform: translateX(-50%) scale(var(--ls, 1)); transform-origin: 50% 100%;
+    display: flex; align-items: center; gap: 4px; padding: 5px 8px;
+    background: var(--paper); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 0 3px 0 var(--ink);
+    white-space: nowrap; font-weight: 600; font-size: 14px; line-height: 1;
+  }
+  .bub::after {
+    content: ""; position: absolute; left: 50%; bottom: -9px; width: 11px; height: 11px; margin-left: -7px;
+    background: var(--paper); border-right: 3px solid var(--ink); border-bottom: 3px solid var(--ink); transform: rotate(45deg);
+  }
+  .bub img { display: block; }
+  .bub button { pointer-events: auto; }
+  .order { flex-direction: column; gap: 4px; padding: 4px 6px 7px; }
+  .order img { width: 48px; height: 48px; }
+  .pat { width: 46px; height: 7px; border-radius: 4px; background: rgba(75, 46, 29, .18); overflow: hidden; }
+  .pat i { display: block; height: 100%; width: 100%; background: var(--green); border-radius: 4px; }
+  .say { font-size: 14px; padding: 7px 11px; }
+  .ing { position: relative; }
+  .ing img { width: 30px; height: 30px; }
+  .ing b {
+    position: absolute; right: -4px; bottom: -3px; font-size: 11px; line-height: 1;
+    background: var(--ink); color: #FFF3DA; border-radius: 8px; padding: 2px 4px;
+  }
+  .arrow { font-size: 16px; margin: 0 1px; opacity: .75; }
+  .res img { width: 38px; height: 38px; }
+  .mini {
+    font: inherit; font-weight: 700; font-size: 15px; color: var(--ink); background: var(--orange);
+    border: 3px solid var(--ink); border-radius: 10px; padding: 5px 10px; margin-left: 4px;
+    box-shadow: 0 2px 0 var(--ink); cursor: pointer;
+  }
+  .mini:hover { background: #F7B45D; }
+  .mini:active { transform: translateY(2px); box-shadow: none; }
+  .mini.alt { background: #F3E3C3; }
+  .pulse { animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.08); } }
+  .ring {
+    position: absolute; left: 0; bottom: 6px; transform: translateX(-50%) scale(var(--ls, 1)); transform-origin: 50% 100%;
+    width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--ink); box-shadow: 0 2px 0 var(--ink);
+    background: conic-gradient(var(--c, var(--orange)) calc(var(--p, 0) * 1turn), rgba(255, 251, 242, .92) 0);
+    display: grid; place-items: center;
+  }
+  .ring span {
+    width: 17px; height: 17px; border-radius: 50%; background: var(--paper);
+    display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  }
+  .ring.warn { animation: wobble .3s linear infinite; }
+  @keyframes wobble {
+    25% { transform: translateX(-50%) scale(var(--ls, 1)) rotate(-10deg); }
+    75% { transform: translateX(-50%) scale(var(--ls, 1)) rotate(10deg); }
+  }
+  .lock {
+    position: absolute; left: 0; bottom: 0; transform: translate(-50%, 50%) scale(var(--ls, 1));
+    font-size: 12px; font-weight: 700; padding: 3px 7px; border-radius: 10px;
+    background: rgba(75, 46, 29, .88); color: #FFF3DA;
+  }
+  .float {
+    position: absolute; left: 0; bottom: 0; transform: translateX(-50%);
+    font-weight: 700; font-size: 26px; color: var(--gold);
+    -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill;
+    animation: floatUp 1.4s ease-out forwards;
+  }
+  .float.bad { color: #FF9C8F; font-size: 20px; }
+  @keyframes floatUp {
+    from { transform: translate(-50%, 0) scale(calc(.6 * var(--ls, 1))); opacity: 0; }
+    15% { transform: translate(-50%, -8px) scale(calc(1.1 * var(--ls, 1))); opacity: 1; }
+    to { transform: translate(-50%, -64px) scale(var(--ls, 1)); opacity: 0; }
+  }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed; top: max(10px, env(safe-area-inset-top)); left: 12px; right: 12px; z-index: 6;
+    display: flex; align-items: center; gap: 8px; pointer-events: none;
+  }
+  #hud > * { pointer-events: auto; }
+  .pill {
+    display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px 0 7px;
+    background: var(--paper); border: 3px solid var(--ink); border-radius: 999px; box-shadow: 0 3px 0 var(--ink);
+    font-weight: 700; font-size: 22px;
+  }
+  .pill.sm { font-size: 17px; padding: 0 14px 0 8px; gap: 6px; }
+  .pill.sm img { width: 30px; height: 30px; }
+  .coin {
+    display: inline-block; flex: none; width: 26px; height: 26px; border-radius: 50%;
+    background: radial-gradient(circle at 36% 34%, #FFF0B3 0 18%, #F8CF4F 42%, #E3A72C 100%);
+    border: 2.5px solid var(--ink); box-shadow: inset 0 -2px 0 rgba(75, 46, 29, .25);
+  }
+  .coin.s { width: 17px; height: 17px; border-width: 2px; vertical-align: -3px; }
+  .coin.fly { position: fixed; left: 0; top: 0; z-index: 25; pointer-events: none; }
+  #coinsPill.bump { animation: bump .3s; }
+  @keyframes bump { 40% { transform: scale(1.12); } }
+  .spacer { flex: 1; }
+  .btn {
+    font: inherit; font-weight: 700; font-size: 18px; color: var(--ink); height: 44px; padding: 0 16px;
+    background: var(--orange); border: 3px solid var(--ink); border-radius: 14px; box-shadow: 0 3px 0 var(--ink);
+    cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn:hover { background: #F7B45D; }
+  .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: 0 3px 0 var(--ink); }
+  .btn.round { width: 44px; padding: 0; background: var(--paper); }
+  .btn.round:hover { background: #FFF1D6; }
+  .btn.alt { background: #F3E3C3; }
+  .btn .badge {
+    min-width: 20px; height: 20px; border-radius: 10px; background: var(--red); color: #fff; font-size: 12px;
+    display: none; place-items: center; padding: 0 5px; border: 2px solid var(--ink); margin-right: -6px;
+  }
+  .btn .badge.on { display: grid; }
+
+  #hint {
+    position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 6;
+    width: max-content; max-width: calc(100vw - 32px); padding: 10px 18px;
+    background: var(--paper); border: 3px solid var(--ink); border-radius: 16px; box-shadow: 0 4px 0 var(--ink);
+    font-size: 17px; font-weight: 500; text-align: center; pointer-events: none;
+    transition: opacity .3s, transform .3s;
+  }
+  #hint.hide { opacity: 0; transform: translate(-50%, 16px); }
+  #hint b { color: var(--orange-2); }
+
+  #toasts {
+    position: fixed; top: 72px; left: 50%; transform: translateX(-50%); z-index: 7; pointer-events: none;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  .toast {
+    background: var(--ink); color: #FFF3DA; font-weight: 600; font-size: 16px; padding: 8px 16px; border-radius: 12px;
+    animation: toastIn .25s ease-out, toastOut .4s ease-in 2.6s forwards;
+  }
+  @keyframes toastIn { from { transform: translateY(-10px); opacity: 0; } }
+  @keyframes toastOut { to { transform: translateY(-10px); opacity: 0; } }
+
+  #tip {
+    position: fixed; left: 0; top: 0; z-index: 8; pointer-events: none; padding: 5px 10px;
+    background: var(--ink); color: #FFF3DA; font-size: 14px; font-weight: 600; border-radius: 10px; white-space: nowrap;
+    opacity: 0; transition: opacity .12s;
+  }
+  #tip.on { opacity: 1; }
+
+  /* ---------- panels ---------- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px;
+    background: rgba(75, 46, 29, .32);
+  }
+  .overlay.hidden { display: none; }
+  .panel {
+    width: min(560px, 100%); max-height: min(700px, calc(100vh - 32px)); display: flex; flex-direction: column;
+    background: var(--cream); border: 4px solid var(--ink); border-radius: 22px; box-shadow: 0 6px 0 var(--ink);
+    overflow: hidden; animation: popIn .22s ease-out;
+  }
+  @keyframes popIn { from { transform: scale(.92); opacity: 0; } }
+  .panel-head {
+    display: flex; align-items: center; gap: 8px; padding: 12px;
+    background: var(--orange); border-bottom: 4px solid var(--ink);
+  }
+  .panel-head h2 { margin: 0 auto 0 6px; font-size: 22px; }
+  .tabs { display: flex; gap: 6px; margin-right: auto; }
+  .tab {
+    font: inherit; font-weight: 700; font-size: 16px; color: var(--ink); padding: 6px 14px;
+    border: 3px solid var(--ink); border-radius: 12px; background: #F9C57E; cursor: pointer;
+  }
+  .tab.on { background: var(--paper); }
+  .x {
+    font: inherit; font-weight: 700; font-size: 18px; width: 38px; height: 38px; flex: none;
+    border: 3px solid var(--ink); border-radius: 12px; background: var(--paper); color: var(--ink); cursor: pointer;
+  }
+  .panel-body { overflow: auto; padding: 12px; display: grid; gap: 10px; }
+  .row {
+    display: grid; grid-template-columns: 58px 1fr auto; gap: 12px; align-items: center; padding: 8px 12px;
+    background: var(--paper); border: 3px solid var(--ink); border-radius: 16px;
+  }
+  .row.locked { background: #F3E4C6; }
+  .row .pic { width: 58px; height: 58px; display: grid; place-items: center; font-size: 34px; }
+  .row .pic img { width: 58px; height: 58px; }
+  .row h3 { margin: 0; font-size: 18px; }
+  .row p { margin: 3px 0 0; font-size: 14px; color: var(--ink-soft); }
+  .ings { display: flex; align-items: center; flex-wrap: wrap; gap: 1px; margin-top: 4px; font-size: 13px; font-weight: 700; }
+  .ings img { width: 26px; height: 26px; }
+  .ings .op { margin: 0 3px; opacity: .6; }
+  .owned { font-weight: 700; color: var(--green); font-size: 15px; }
+  .buy { height: 38px; font-size: 16px; padding: 0 12px; }
+  .stats { font-size: 14px; color: var(--ink-soft); text-align: center; }
+  .help ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; font-size: 16px; line-height: 1.35; }
+  .help .tiny { margin: 0; font-size: 14px; color: var(--ink-soft); line-height: 1.4; }
+  .help .btn { justify-self: start; height: 38px; font-size: 15px; }
+
+  .start { background: rgba(248, 232, 200, .5); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+  .title { text-align: center; display: grid; justify-items: center; gap: 8px; animation: popIn .4s ease-out; }
+  .logo {
+    display: grid; line-height: .92; font-weight: 700; color: var(--orange);
+    -webkit-text-stroke: 8px var(--ink); paint-order: stroke fill; text-shadow: 0 6px 0 var(--ink);
+  }
+  .logo span:first-child { font-size: clamp(40px, 9vw, 70px); color: #FFF3DA; }
+  .logo span:last-child { font-size: clamp(58px, 14vw, 116px); }
+  .title p { margin: 6px 0 10px; font-size: 20px; font-weight: 500; }
+  .btn.big { height: 58px; font-size: 22px; padding: 0 30px; border-radius: 18px; box-shadow: 0 5px 0 var(--ink); }
+
+  @media (max-height: 520px) {
+    #hud { top: 6px; }
+    .pill { height: 36px; font-size: 17px; }
+    .pill .coin { width: 22px; height: 22px; }
+    .btn { height: 36px; font-size: 15px; padding: 0 12px; }
+    .btn.round { width: 36px; }
+    #hint { font-size: 14px; padding: 6px 12px; bottom: 6px; max-width: min(640px, calc(100vw - 24px)); }
+    #toasts { top: 48px; }
+  }
+  @media (max-width: 560px) {
+    .pill { height: 40px; font-size: 19px; }
+    .pill.sm { display: none; }
+    .btn { height: 40px; font-size: 16px; padding: 0 12px; }
+    .btn.round { width: 40px; }
+    #hint { font-size: 15px; padding: 8px 12px; }
+    .row { grid-template-columns: 46px 1fr; }
+    .row .pic, .row .pic img { width: 46px; height: 46px; }
+    .row > :last-child { grid-column: 1 / -1; justify-self: end; }
+  }
+</style>
 </head>
 <body>
+<canvas id="game" tabindex="0" aria-label="Hillside Bakery game"></canvas>
+<noscript><p style="position:fixed;inset:0;display:grid;place-items:center;margin:0;font-size:20px;">Hillside Bakery needs JavaScript to run.</p></noscript>
+<div id="grain"></div>
+<div id="labels"></div>
+
+<div id="hud">
+  <div class="pill" id="coinsPill" title="Coins"><span class="coin"></span><span id="coinText">0</span></div>
+  <div class="pill sm" id="servedPill" title="Customers served"><img id="servedIcon" alt=""><span id="servedText">0</span></div>
+  <div class="spacer"></div>
+  <button class="btn" id="shopBtn"><span class="lbl">Shop</span><span class="badge" id="shopBadge">!</span></button>
+  <button class="btn round" id="soundBtn" aria-label="Toggle sound">🔊</button>
+  <button class="btn round" id="helpBtn" aria-label="How to play">?</button>
+</div>
+
+<div id="hint" class="hide"></div>
+<div id="toasts"></div>
+<div id="tip"></div>
+
+<div id="shop" class="overlay hidden">
+  <div class="panel" role="dialog" aria-label="Shop">
+    <div class="panel-head">
+      <div class="tabs">
+        <button class="tab on" data-tab="recipes">Recipes</button>
+        <button class="tab" data-tab="upgrades">Upgrades</button>
+      </div>
+      <button class="x" data-close aria-label="Close">✕</button>
+    </div>
+    <div class="panel-body" id="shopList"></div>
+  </div>
+</div>
+
+<div id="help" class="overlay hidden">
+  <div class="panel" role="dialog" aria-label="How to play">
+    <div class="panel-head"><h2>How to bake</h2><button class="x" data-close aria-label="Close">✕</button></div>
+    <div class="panel-body help">
+      <ol>
+        <li><b>Grab ingredients</b> from the pantry on the left. Click and drag them.</li>
+        <li><b>Drop them in the mixing bowl</b> to match a recipe, then press <b>Mix!</b></li>
+        <li><b>Put the dough in the oven.</b> Take it out once it's golden, before it burns!</li>
+        <li><b>Serve customers</b> by dropping (or throwing!) what they ask for onto them.</li>
+        <li>Spend coins in the <b>Shop</b> on new recipes and upgrades.</li>
+      </ol>
+      <p class="tiny">Tips: scroll or pinch to zoom, drag empty space to look around, press <b>R</b> while holding something to spin it, and toss burnt treats in the bin.</p>
+      <p class="stats" id="stats"></p>
+      <button class="btn alt" id="resetBtn">Reset progress</button>
+    </div>
+  </div>
+</div>
+
+<div id="start" class="overlay start">
+  <div class="title">
+    <div class="logo"><span>Hillside</span><span>Bakery</span></div>
+    <p>Mix, bake &amp; sell cozy treats.</p>
+    <button class="btn big" id="startBtn" disabled>Warming up the oven…</button>
+  </div>
+</div>
+
+<script>
+  // If the game can't start (no WebGL, blocked download, very old browser) say so instead of spinning forever.
+  (function () {
+    function say(msg) { var b = document.getElementById('startBtn'); if (b && b.disabled) b.textContent = msg; }
+    window.addEventListener('error', function () { say('Oops! This browser can\u2019t run the game.'); });
+    setTimeout(function () { say('Still loading\u2026 check your internet connection.'); }, 20000);
+  })();
+</script>
+<script type="module">
+import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+
+/* =====================================================================
+   Helpers
+   ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (t) => t * t * (3 - 2 * t);
+const damp = (a, b, k, dt) => lerp(a, b, 1 - Math.exp(-k * dt));
+
+/* =====================================================================
+   Game data
+   ===================================================================== */
+const ITEMS = {
+  flour:      { name: 'Flour', type: 'ingredient' },
+  milk:       { name: 'Milk', type: 'ingredient' },
+  butter:     { name: 'Butter', type: 'ingredient' },
+  egg:        { name: 'Egg', type: 'ingredient' },
+  sugar:      { name: 'Sugar', type: 'ingredient' },
+  chocolate:  { name: 'Chocolate', type: 'ingredient' },
+  strawberry: { name: 'Strawberry', type: 'ingredient' },
+  cinnamon:   { name: 'Cinnamon', type: 'ingredient' },
+  toast:      { name: 'Toast Loaf', type: 'good', bake: 6 },
+  baguette:   { name: 'Baguette', type: 'good', bake: 7 },
+  croissant:  { name: 'Croissant', type: 'good', bake: 5 },
+  cookie:     { name: 'Cookie', type: 'good', bake: 4 },
+  donut:      { name: 'Donut', type: 'good', bake: 5 },
+  roll:       { name: 'Cinnamon Roll', type: 'good', bake: 6 },
+  sponge:     { name: 'Sponge Cake', type: 'good', bake: 7 },
+  cake:       { name: 'Strawberry Cake', type: 'good' },
+  coin:       { name: 'Coin', type: 'coin' },
+};
+
+// Bowl mixes: exact ingredient counts -> dough. `sells` is what customers ask for.
+const RECIPES = [
+  { id: 'toast',     needs: { flour: 2, milk: 1 },                          makes: 'toast',     sells: 'toast',     price: 8,  cost: 0 },
+  { id: 'baguette',  needs: { flour: 3 },                                   makes: 'baguette',  sells: 'baguette',  price: 10, cost: 20 },
+  { id: 'croissant', needs: { flour: 1, butter: 2 },                        makes: 'croissant', sells: 'croissant', price: 15, cost: 45 },
+  { id: 'cookie',    needs: { flour: 1, sugar: 1, chocolate: 1 },           makes: 'cookie',    sells: 'cookie',    price: 12, cost: 80 },
+  { id: 'donut',     needs: { flour: 1, egg: 1, sugar: 1 },                 makes: 'donut',     sells: 'donut',     price: 18, cost: 130 },
+  { id: 'roll',      needs: { flour: 1, butter: 1, sugar: 1, cinnamon: 1 }, makes: 'roll',      sells: 'roll',      price: 24, cost: 200 },
+  { id: 'cake',      needs: { flour: 1, egg: 2, sugar: 1 },                 makes: 'sponge',    sells: 'cake',      price: 42, cost: 320, topping: 'strawberry' },
+];
+
+const UPGRADES = [
+  { id: 'hotOven', icon: '🔥', name: 'Toasty Oven',    cost: 60,  desc: 'Everything bakes 35% faster.' },
+  { id: 'bell',    icon: '🔔', name: 'Door Bell',      cost: 90,  desc: 'Customers drop by more often.' },
+  { id: 'cozy',    icon: '🪴', name: 'Cozy Corner',    cost: 110, desc: 'Plants and bunting. Customers wait 50% longer.' },
+  { id: 'cat',     icon: '🐈', name: 'Shop Cat',       cost: 150, desc: 'A sleepy cat. Customers leave bigger tips.' },
+  { id: 'awning',  icon: '⛱️', name: 'Striped Awning', cost: 250, desc: 'A fancy display. Everything sells for 25% more.' },
+];
+
+const BURN_AT = 2.3;     // bake progress (1 = done) at which things burn
+const ITEM_S = 1.25;     // global size of grabbable items
+
+/* =====================================================================
+   Save state
+   ===================================================================== */
+const SAVE_KEY = 'hillside-bakery-v1';
+function freshState() {
+  return { coins: 0, recipes: ['toast'], upgrades: [], served: 0, earned: 0, tutorialDone: false, muted: false };
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) return { ...freshState(), ...JSON.parse(raw) };
+  } catch (e) { /* storage unavailable */ }
+  return freshState();
+}
+const state = loadState();
+let saveTimer = 0;
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+  }, 200);
+}
+const has = (id) => state.upgrades.includes(id);
+const recipeKnown = (r) => state.recipes.includes(r.id);
+const bakeMult = () => (has('hotOven') ? 0.65 : 1);
+const priceMult = () => (has('awning') ? 1.25 : 1);
+const patienceMult = () => (has('cozy') ? 1.5 : 1);
+const spawnMult = () => (has('bell') ? 0.65 : 1);
+function knownIngredients() {
+  const s = new Set();
+  for (const r of RECIPES) {
+    if (!recipeKnown(r)) continue;
+    for (const k in r.needs) s.add(k);
+    if (r.topping) s.add(r.topping);
+  }
+  return s;
+}
+
+/* =====================================================================
+   Sound (tiny WebAudio synth, no files)
+   ===================================================================== */
+const Sound = {
+  ctx: null, out: null, last: {}, noiseBuf: null,
+  init() {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    this.ctx = new AC();
+    this.out = this.ctx.createGain();
+    this.out.gain.value = state.muted ? 0 : 0.55;
+    this.out.connect(this.ctx.destination);
+  },
+  setMuted(m) {
+    state.muted = m; save();
+    if (this.out) this.out.gain.value = m ? 0 : 0.55;
+  },
+  ok(name, gap = 0.03) {
+    if (!this.ctx || state.muted) return false;
+    const t = this.ctx.currentTime;
+    if (this.last[name] !== undefined && t - this.last[name] < gap) return false;
+    this.last[name] = t;
+    return true;
+  },
+  tone(f, dur, { type = 'sine', vol = 0.2, to = 0, delay = 0 } = {}) {
+    const c = this.ctx, t0 = c.currentTime + delay;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f, t0);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(this.out);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  },
+  noise(dur, { vol = 0.2, freq = 1200, q = 0.8, delay = 0, type = 'bandpass' } = {}) {
+    const c = this.ctx, t0 = c.currentTime + delay;
+    if (!this.noiseBuf) {
+      const len = c.sampleRate;
+      this.noiseBuf = c.createBuffer(1, len, c.sampleRate);
+      const d = this.noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const s = c.createBufferSource(); s.buffer = this.noiseBuf;
+    const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    s.connect(f); f.connect(g); g.connect(this.out);
+    s.start(t0, Math.random() * 0.5); s.stop(t0 + dur + 0.03);
+  },
+  pop()    { if (this.ok('pop')) this.tone(520, 0.12, { type: 'triangle', to: 900, vol: 0.18 }); },
+  grab()   { if (this.ok('grab')) this.tone(360, 0.09, { type: 'triangle', to: 640, vol: 0.13 }); },
+  thud(v)  {
+    if (!this.ok('thud', 0.045)) return;
+    const vol = Math.min(0.2, 0.025 + v * 0.02);
+    this.tone(150 + Math.random() * 70, 0.09, { to: 70, vol });
+    this.noise(0.05, { vol: vol * 0.5, freq: 900 });
+  },
+  plop()   { if (this.ok('plop')) this.tone(320, 0.16, { to: 120, vol: 0.22 }); },
+  whisk()  { if (this.ok('whisk', 0.5)) for (let i = 0; i < 6; i++) this.noise(0.13, { vol: 0.1, freq: 2600 + i * 180, delay: i * 0.16, q: 2 }); },
+  ding()   { if (this.ok('ding', 0.08)) { this.tone(1318, 0.9, { vol: 0.16 }); this.tone(1976, 0.7, { vol: 0.07, delay: 0.01 }); } },
+  coin()   { if (this.ok('coin', 0.045)) { this.tone(988, 0.07, { type: 'square', vol: 0.05 }); this.tone(1319, 0.18, { type: 'square', vol: 0.05, delay: 0.06 }); } },
+  sad()    { if (this.ok('sad', 0.3)) { this.tone(392, 0.2, { type: 'triangle', vol: 0.14 }); this.tone(311, 0.35, { type: 'triangle', vol: 0.14, delay: 0.17 }); } },
+  yay()    { if (this.ok('yay', 0.2)) [523, 659, 784].forEach((f, i) => this.tone(f, 0.18, { type: 'triangle', vol: 0.13, delay: i * 0.08 })); },
+  unlock() { if (this.ok('unlock', 0.2)) [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.3, { type: 'triangle', vol: 0.13, delay: i * 0.09 })); },
+  trash()  { if (this.ok('trash', 0.1)) { this.noise(0.25, { vol: 0.22, freq: 700, type: 'lowpass' }); this.tone(200, 0.2, { to: 90, vol: 0.13 }); } },
+  bell()   { if (this.ok('bell', 0.4)) { this.tone(1568, 0.5, { vol: 0.09 }); this.tone(2093, 0.4, { vol: 0.06, delay: 0.12 }); this.tone(1568, 0.5, { vol: 0.07, delay: 0.24 }); } },
+  sizzle() { if (this.ok('sizzle', 0.8)) this.noise(0.7, { vol: 0.07, freq: 5000, type: 'highpass' }); },
+  meow()   { if (this.ok('meow', 0.6)) { this.tone(620, 0.12, { type: 'triangle', to: 820, vol: 0.09 }); this.tone(820, 0.3, { type: 'triangle', to: 520, vol: 0.09, delay: 0.11 }); } },
+  whoosh() { if (this.ok('whoosh', 0.15)) this.noise(0.22, { vol: 0.1, freq: 700, q: 0.5 }); },
+  click()  { if (this.ok('click', 0.03)) this.tone(700, 0.05, { type: 'triangle', vol: 0.1 }); },
+};
+
+/* =====================================================================
+   Renderer, camera, lights
+   ===================================================================== */
+const canvas = $('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+const MAX_DPR = window.matchMedia('(pointer: coarse)').matches ? 1.75 : 2;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
+renderer.setClearColor(0x000000, 0);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+const CAM_DIR = new THREE.Vector3(1, 0.9, 1).normalize();
+const CAM_TARGET = new THREE.Vector3(0, 1.5, 0);
+const view = { zoom: 1, panX: 0, panY: 0, W: 1, H: 1, ppu: 60 };
+
+// Points that must always fit on screen at zoom 1
+const ROOM_BOUNDS = [];
+for (const x of [-5.9, 5.9]) for (const z of [-4.9, 4.9]) ROOM_BOUNDS.push(new THREE.Vector3(x, -0.5, z), new THREE.Vector3(x, 0, z));
+ROOM_BOUNDS.push(new THREE.Vector3(-5.9, 4.5, -4.9), new THREE.Vector3(-5.9, 4.5, 4.9), new THREE.Vector3(5.9, 4.5, -4.9));
+
+const hemi = new THREE.HemisphereLight(0xFFF1DA, 0xE2B27E, 1.45);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xFFF0D4, 2.25);
+sun.position.set(4.5, 14, 9);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -11, right: 11, top: 11, bottom: -11, near: 1, far: 45 });
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.025;
+sun.shadow.radius = 3;
+scene.add(sun, sun.target);
+
+/* =====================================================================
+   Toon materials + ink outlines (inverted hull, constant pixel width)
+   ===================================================================== */
+const GRAD = (() => {
+  const d = new Uint8Array([110, 168, 218, 255]);
+  const t = new THREE.DataTexture(d, d.length, 1, THREE.RedFormat);
+  t.minFilter = THREE.NearestFilter; t.magFilter = THREE.NearestFilter;
+  t.generateMipmaps = false; t.needsUpdate = true;
+  return t;
+})();
+const _toonCache = new Map();
+function toon(color, extra) {
+  if (!extra) {
+    let m = _toonCache.get(color);
+    if (!m) { m = new THREE.MeshToonMaterial({ color, gradientMap: GRAD }); _toonCache.set(color, m); }
+    return m;
+  }
+  return new THREE.MeshToonMaterial({ color, gradientMap: GRAD, ...extra });
+}
+
+const OUT = { thick: { value: 2 }, res: { value: new THREE.Vector2(1, 1) } };
+function outlineMaterial(color, scale = 1) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(color) }, uThick: OUT.thick, uRes: OUT.res, uScale: { value: scale } },
+    vertexShader: /* glsl */`
+      uniform float uThick;
+      uniform vec2 uRes;
+      uniform float uScale;
+      void main() {
+        vec4 clip = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vec3 n = normalMatrix * normal;
+        vec2 d = n.xy;
+        float l = length(d);
+        d = l > 1e-5 ? d / l : vec2(0.0);
+        clip.xy += d * uThick * uScale * 2.0 / uRes * clip.w;
+        gl_Position = clip;
+      }`,
+    fragmentShader: /* glsl */`
+      uniform vec3 uColor;
+      void main() {
+        gl_FragColor = vec4(uColor, 1.0);
+        #include <colorspace_fragment>
+      }`,
+    side: THREE.BackSide,
+  });
+}
+const INK = 0x4B2E1D;
+const OUTLINE = outlineMaterial(INK, 1);
+const OUTLINE_THIN = outlineMaterial(INK, 0.55);
+const OUTLINE_HI = outlineMaterial(0xFF9A2E, 2.1);
+
+// Outlines use a copy of the geometry with merged, smoothed normals so hard edges don't crack.
+const _outlineGeo = new WeakMap();
+function outlineGeo(geo) {
+  let g = _outlineGeo.get(geo);
+  if (!g) {
+    const tmp = new THREE.BufferGeometry();
+    tmp.setAttribute('position', geo.getAttribute('position'));
+    if (geo.index) tmp.setIndex(geo.index);
+    g = mergeVertices(tmp, 1e-3);
+    g.computeVertexNormals();
+    _outlineGeo.set(geo, g);
+  }
+  return g;
+}
+function mesh(geo, mat, o = {}) {
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = o.cast !== false;
+  m.receiveShadow = o.receive !== false;
+  if (o.outline !== false) {
+    const ol = new THREE.Mesh(outlineGeo(geo), o.outline === 'thin' ? OUTLINE_THIN : OUTLINE);
+    ol.userData.outline = true;
+    ol.userData.base = ol.material;
+    ol.raycast = () => {};
+    m.add(ol);
+  }
+  return m;
+}
+function highlight(obj, on) {
+  if (!obj) return;
+  obj.traverse((o) => { if (o.userData.outline) o.material = on ? OUTLINE_HI : o.userData.base; });
+}
+function forMats(o, fn) {
+  if (!o.material || o.userData.outline) return;
+  if (Array.isArray(o.material)) o.material.forEach(fn); else fn(o.material);
+}
+
+const rbox = (w, h, d, r = 0.05, s = 2) => new RoundedBoxGeometry(w, h, d, s, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001));
+const lathe = (pts, seg = 28) => new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg);
+
+// Add a mesh to the scene (or a parent) in one line
+function P(geo, mat, x, y, z, o = {}) {
+  const m = mesh(geo, typeof mat === 'number' ? toon(mat) : mat, o);
+  m.position.set(x, y, z);
+  if (o.rx) m.rotation.x = o.rx;
+  if (o.ry) m.rotation.y = o.ry;
+  if (o.rz) m.rotation.z = o.rz;
+  (o.parent || scene).add(m);
+  return m;
+}
+
+/* =====================================================================
+   Hand-drawn canvas textures
+   ===================================================================== */
+const TEX = {};
+function ctex(w, h, draw, repeat) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
+  return t;
+}
+function rng(seed) { let s = seed; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function texMat(tex, rx, ry, color = 0xFFFFFF) {
+  const t = tex.clone();
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(rx, ry);
+  t.needsUpdate = true;
+  return new THREE.MeshToonMaterial({ color, gradientMap: GRAD, map: t });
+}
+function roundRect(g, x, y, w, h, r) {
+  g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+function starPath(g, cx, cy, r1, r2, n = 5) {
+  g.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / n, r = i % 2 ? r2 : r1;
+    g.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+  }
+  g.closePath();
+}
+function heartPath(g, cx, cy, s) {
+  g.beginPath();
+  g.moveTo(cx, cy + s * 0.9);
+  g.bezierCurveTo(cx - s * 1.3, cy + s * 0.1, cx - s * 0.9, cy - s * 0.95, cx, cy - s * 0.4);
+  g.bezierCurveTo(cx + s * 0.9, cy - s * 0.95, cx + s * 1.3, cy + s * 0.1, cx, cy + s * 0.9);
+  g.closePath();
+}
+function labelTex(text, bg = '#FFF4DC', fg = '#8A5230') {
+  return ctex(256, 128, (g, w, h) => {
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
+    g.strokeStyle = fg; g.lineWidth = 6; roundRect(g, 10, 10, w - 20, h - 20, 14); g.stroke();
+    g.fillStyle = fg; g.font = '700 50px Fredoka, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, w / 2, h / 2 + 3, w - 40);
+  });
+}
+
+function makeTextures() {
+  TEX.floor = ctex(1024, 1024, (g, w, h) => {
+    const r = rng(11), rows = 18, rh = h / rows;
+    const shades = ['#E7B87B', '#DFAB6D', '#EBC089', '#DCA566', '#E4B376'];
+    for (let i = 0; i < rows; i++) {
+      let x = -Math.floor(r() * 220);
+      while (x < w) {
+        const len = 170 + Math.floor(r() * 200);
+        g.fillStyle = shades[Math.floor(r() * shades.length)];
+        g.fillRect(x, i * rh, len, rh);
+        g.strokeStyle = 'rgba(150, 90, 45, 0.16)'; g.lineWidth = 2;
+        for (let k = 0; k < 2; k++) {
+          const yy = i * rh + 10 + r() * (rh - 20);
+          g.beginPath(); g.moveTo(x + 12, yy);
+          g.bezierCurveTo(x + len * 0.35, yy + 5, x + len * 0.65, yy - 5, x + len - 12, yy);
+          g.stroke();
+        }
+        g.fillStyle = '#A8683A'; g.fillRect(x, i * rh, 4, rh);
+        g.fillStyle = 'rgba(120, 70, 35, 0.55)';
+        for (const f of [0.3, 0.7]) { g.beginPath(); g.arc(x + 13, i * rh + rh * f, 2.6, 0, 7); g.fill(); }
+        x += len;
+      }
+      g.fillStyle = '#A8683A'; g.fillRect(0, i * rh, w, 4);
+    }
+  });
+  TEX.slab = ctex(512, 64, (g, w, h) => {
+    g.fillStyle = '#B9763F'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#E7B87B'; g.fillRect(0, 0, w, 12);
+    g.fillStyle = '#8E5530'; g.fillRect(0, 12, w, 3);
+    g.fillStyle = '#9F612F'; for (let x = 0; x < w; x += 128) g.fillRect(x, 15, 3, h);
+    g.fillStyle = 'rgba(90, 50, 25, 0.22)'; g.fillRect(0, 42, w, 2);
+  });
+  TEX.wall = ctex(256, 256, (g, w, h) => {
+    g.fillStyle = '#FCEFD2'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#F8E5C0'; for (let x = 0; x < w; x += 64) g.fillRect(x + 20, 0, 24, h);
+    g.fillStyle = 'rgba(224, 160, 90, 0.4)';
+    for (let y = 16; y < h + 32; y += 64) for (let x = 0; x <= w; x += 64) {
+      g.beginPath(); g.ellipse(x, y, 3.5, 6, 0.5, 0, 7); g.fill();
+      g.beginPath(); g.ellipse(x, y + 32, 3.5, 6, -0.5, 0, 7); g.fill();
+    }
+  });
+  TEX.wain = ctex(256, 128, (g, w, h) => {
+    g.fillStyle = '#F1AA57'; g.fillRect(0, 0, w, h);
+    for (let x = 0; x < w; x += 32) {
+      g.fillStyle = '#F6BE75'; g.fillRect(x + 4, 0, 7, h);
+      g.fillStyle = '#D2883B'; g.fillRect(x, 0, 3, h);
+    }
+  });
+  TEX.sign = ctex(1024, 256, (g, w, h) => {
+    g.fillStyle = '#6E4027'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(0, 0, 0, 0.18)'; g.lineWidth = 4;
+    for (let y = 40; y < h; y += 58) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y + 6); g.stroke(); }
+    g.font = '700 172px Fredoka, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineJoin = 'round'; g.lineWidth = 20; g.strokeStyle = '#3B2214';
+    g.strokeText('BAKERY', w / 2, h / 2 + 12);
+    g.fillStyle = '#FFE9C2'; g.fillText('BAKERY', w / 2, h / 2 + 12);
+  });
+  TEX.view = ctex(256, 256, (g, w, h) => {
+    const sky = g.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, '#A6D6EE'); sky.addColorStop(1, '#E8F6EE');
+    g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#FFF4CF'; g.beginPath(); g.arc(196, 58, 22, 0, 7); g.fill();
+    g.fillStyle = '#FFFFFF';
+    for (const [cx, cy, s] of [[62, 70, 1], [150, 38, 0.8]]) {
+      g.beginPath(); g.arc(cx, cy, 16 * s, 0, 7); g.arc(cx + 18 * s, cy - 8 * s, 20 * s, 0, 7); g.arc(cx + 38 * s, cy, 15 * s, 0, 7); g.fill();
+    }
+    g.fillStyle = '#BCDC8C';
+    g.beginPath(); g.moveTo(0, 168); g.quadraticCurveTo(80, 110, 170, 158); g.quadraticCurveTo(220, 182, 256, 146); g.lineTo(256, 256); g.lineTo(0, 256); g.fill();
+    g.fillStyle = '#FFF4E0'; g.fillRect(150, 128, 26, 20);
+    g.fillStyle = '#E0775A'; g.beginPath(); g.moveTo(146, 130); g.lineTo(163, 114); g.lineTo(180, 130); g.fill();
+    g.fillStyle = '#8FC266';
+    g.beginPath(); g.moveTo(0, 214); g.quadraticCurveTo(110, 160, 256, 204); g.lineTo(256, 256); g.lineTo(0, 256); g.fill();
+    g.fillStyle = '#7DB356';
+    for (const [x, y] of [[40, 214], [70, 206], [200, 214]]) { g.beginPath(); g.arc(x, y, 10, 0, 7); g.fill(); }
+  });
+  TEX.glow = ctex(128, 128, (g, w, h) => {
+    const gr = g.createRadialGradient(64, 86, 4, 64, 72, 84);
+    gr.addColorStop(0, '#FFF3BF'); gr.addColorStop(0.45, '#FFB24A'); gr.addColorStop(1, '#C9521F');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+  });
+  TEX.choc = ctex(128, 96, (g, w, h) => {
+    g.fillStyle = '#4E2814'; g.fillRect(0, 0, w, h);
+    const cols = 4, rows = 3, cw = w / cols, rh = h / rows;
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      g.fillStyle = '#76422A'; g.fillRect(i * cw + 3, j * rh + 3, cw - 6, rh - 6);
+      g.fillStyle = '#8A5231'; g.fillRect(i * cw + 7, j * rh + 7, cw - 15, rh - 15);
+    }
+  });
+  TEX.berry = ctex(128, 128, (g, w, h) => {
+    g.fillStyle = '#E8474E'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#FFE39A';
+    for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {
+      g.beginPath(); g.ellipse(i * 16 + (j % 2) * 8 + 4, j * 16 + 8, 2.2, 3.4, 0, 0, 7); g.fill();
+    }
+  });
+  TEX.sack = ctex(256, 128, (g, w, h) => {
+    g.fillStyle = '#F4E6CB'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#9DBBDC'; g.fillRect(0, h * 0.47, w, 6);
+    g.fillStyle = '#B97A43'; g.font = '700 23px Fredoka, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (const u of [0.25, 0.75]) g.fillText('FLOUR', u * w, h * 0.67);
+  });
+  TEX.spiral = ctex(256, 256, (g, w, h) => {
+    g.fillStyle = '#FFFFFF'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#B27A4B'; g.lineWidth = 11; g.lineCap = 'round';
+    g.beginPath();
+    for (let a = 0; a < Math.PI * 7; a += 0.05) {
+      const r = 6 + a * 5.2;
+      g.lineTo(128 + Math.cos(a) * r, 128 + Math.sin(a) * r);
+    }
+    g.stroke();
+  });
+  TEX.stripes = ctex(256, 64, (g, w, h) => {
+    for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? '#FFF4DC' : '#F6C85E'; g.fillRect(i * 32, 0, 32, h); }
+  });
+  TEX.rug = ctex(256, 256, (g) => {
+    ['#F0A955', '#FFF1D6', '#E98B7B', '#FFF1D6', '#F0A955', '#FBE3B6'].forEach((c, i) => {
+      g.fillStyle = c; g.beginPath(); g.arc(128, 128, 128 - i * 19, 0, 7); g.fill();
+    });
+    g.strokeStyle = '#D98D3E'; g.lineWidth = 4; g.setLineDash([10, 10]);
+    g.beginPath(); g.arc(128, 128, 96, 0, 7); g.stroke();
+  });
+  TEX.clock = ctex(128, 128, (g) => {
+    g.fillStyle = '#FFF8EA'; g.fillRect(0, 0, 128, 128);
+    g.fillStyle = '#4B2E1D';
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      g.beginPath(); g.arc(64 + Math.sin(a) * 50, 64 - Math.cos(a) * 50, i % 3 ? 3 : 6, 0, 7); g.fill();
+    }
+  });
+  TEX.puff = ctex(64, 64, (g) => {
+    const gr = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.55, 'rgba(255,255,255,0.85)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  });
+  TEX.star = ctex(64, 64, (g) => {
+    starPath(g, 32, 34, 27, 12); g.lineJoin = 'round';
+    g.lineWidth = 6; g.strokeStyle = '#4B2E1D'; g.stroke(); g.fillStyle = '#FFD65A'; g.fill();
+  });
+  TEX.heart = ctex(64, 64, (g) => {
+    heartPath(g, 32, 30, 22); g.lineJoin = 'round';
+    g.lineWidth = 6; g.strokeStyle = '#4B2E1D'; g.stroke(); g.fillStyle = '#FF7FA3'; g.fill();
+  });
+  TEX.zz = ctex(64, 64, (g) => {
+    g.font = '700 46px Fredoka, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineJoin = 'round'; g.lineWidth = 8; g.strokeStyle = '#4B2E1D'; g.strokeText('z', 32, 32);
+    g.fillStyle = '#FFF6E4'; g.fillText('z', 32, 32);
+  });
+  TEX.menuCanvas = document.createElement('canvas');
+  TEX.menuCanvas.width = 512; TEX.menuCanvas.height = 448;
+  TEX.menu = new THREE.CanvasTexture(TEX.menuCanvas);
+  TEX.menu.colorSpace = THREE.SRGBColorSpace;
+  TEX.sugarLabel = labelTex('SUGAR');
+  TEX.cinnLabel = labelTex('CINNAMON');
+}
+
+function drawMenu() {
+  const c = TEX.menuCanvas, g = c.getContext('2d'), w = c.width, h = c.height, r = rng(5);
+  g.fillStyle = '#34443A'; g.fillRect(0, 0, w, h);
+  g.fillStyle = 'rgba(255, 255, 255, 0.045)';
+  for (let i = 0; i < 26; i++) { g.beginPath(); g.ellipse(r() * w, r() * h, 40 + r() * 70, 10 + r() * 20, r() * 3, 0, 7); g.fill(); }
+  g.fillStyle = '#F4EEDC'; g.strokeStyle = '#F4EEDC';
+  g.textBaseline = 'middle'; g.textAlign = 'center';
+  g.font = '700 62px Fredoka, sans-serif'; g.fillText('MENU', w / 2, 56);
+  g.lineWidth = 3; g.setLineDash([12, 9]);
+  g.beginPath(); g.moveTo(90, 98); g.lineTo(w - 90, 98); g.stroke();
+  g.setLineDash([2, 10]);
+  const list = RECIPES.filter(recipeKnown);
+  const lh = Math.min(50, (h - 130) / Math.max(1, list.length));
+  g.font = `500 ${Math.round(lh * 0.6)}px Fredoka, sans-serif`;
+  list.forEach((rec, i) => {
+    const y = 128 + i * lh + lh / 2;
+    const name = ITEMS[rec.sells].name, price = String(Math.round(rec.price * priceMult()));
+    g.textAlign = 'left'; g.fillText(name, 40, y);
+    g.textAlign = 'right'; g.fillText(price, w - 40, y);
+    const nw = g.measureText(name).width, pw = g.measureText(price).width;
+    g.beginPath(); g.moveTo(52 + nw, y + 6); g.lineTo(w - 52 - pw, y + 6); g.stroke();
+  });
+  g.setLineDash([]);
+  TEX.menu.needsUpdate = true;
+}
+
+/* =====================================================================
+   Item models (ingredients + baked goods)
+   ===================================================================== */
+const GEO = {}, MAT = {};
+
+// Materials that change colour while baking: raw -> golden -> burnt
+function bakeMat(raw, baked, burnt = 0x3A281D, extra) {
+  const m = new THREE.MeshToonMaterial({ color: raw, gradientMap: GRAD, ...extra });
+  m.userData.bake = [new THREE.Color(raw), new THREE.Color(baked), new THREE.Color(burnt)];
+  return m;
+}
+const fixedMat = (color, extra) => bakeMat(color, color, 0x2E2018, extra);
+
+function applyBake(group, p) {
+  const t1 = smooth(clamp(p, 0, 1));
+  const t2 = smooth(clamp((p - 1.35) / (BURN_AT - 1.35), 0, 1));
+  group.traverse((o) => {
+    if (o.userData.topping) o.visible = p >= 1;
+    forMats(o, (m) => {
+      const b = m.userData.bake;
+      if (b) m.color.copy(b[0]).lerp(b[1], t1).lerp(b[2], t2);
+    });
+  });
+}
+
+function crescentGeometry() {
+  const N = 44, M = 16, R = 0.16, A = 1.2;
+  const rOf = (t) => 0.1 * Math.pow(Math.sin(Math.PI * t), 0.7) * (0.86 + 0.14 * Math.abs(Math.cos(Math.PI * 5 * t)));
+  const pos = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N, th = -A + 2 * A * t, r = rOf(t);
+    const cx = R * Math.cos(th), cz = R * Math.sin(th), nx = Math.cos(th), nz = Math.sin(th);
+    for (let j = 0; j <= M; j++) {
+      const ph = (j / M) * Math.PI * 2;
+      pos.push(cx + nx * Math.cos(ph) * r, Math.sin(ph) * r * 0.78, cz + nz * Math.cos(ph) * r);
+    }
+  }
+  const idx = [];
+  for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) {
+    const a = i * (M + 1) + j, b = a + M + 1;
+    idx.push(a, a + 1, b, a + 1, b + 1, b);
+  }
+  let g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g = mergeVertices(g, 1e-4);
+  g.computeVertexNormals();
+  g.computeBoundingBox();
+  const c = new THREE.Vector3();
+  g.boundingBox.getCenter(c);
+  g.translate(-c.x, -c.y, -c.z);
+  const at = (th) => [R * Math.cos(th) - c.x, 0, R * Math.sin(th) - c.z];
+  g.userData.spheres = [{ r: 0.09, o: at(0) }, { r: 0.068, o: at(0.78) }, { r: 0.068, o: at(-0.78) }];
+  return g;
+}
+
+function initModels() {
+  GEO.eye = new THREE.SphereGeometry(0.026, 10, 8).scale(1, 1.3, 0.5);
+  GEO.smile = new THREE.TorusGeometry(0.028, 0.0075, 6, 14, Math.PI).rotateZ(Math.PI);
+  GEO.blush = new THREE.CircleGeometry(0.03, 16);
+  MAT.eye = new THREE.MeshBasicMaterial({ color: 0x2B1A10 });
+  MAT.blush = new THREE.MeshBasicMaterial({ color: 0xF4969A, transparent: true, opacity: 0.75, depthWrite: false });
+
+  GEO.sack = lathe([[0, 0], [0.15, 0], [0.195, 0.025], [0.215, 0.08], [0.222, 0.15], [0.215, 0.22], [0.19, 0.29], [0.14, 0.35],
+    [0.1, 0.39], [0.085, 0.41], [0.105, 0.44], [0.12, 0.465], [0.095, 0.485], [0, 0.48]], 28).translate(0, -0.24, 0);
+  GEO.sackTie = new THREE.TorusGeometry(0.09, 0.02, 8, 24).rotateX(Math.PI / 2);
+  MAT.sack = new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.sack });
+
+  GEO.egg = (() => {
+    const g = new THREE.SphereGeometry(0.135, 22, 16), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const y = p.getY(i), k = 1 - 0.13 * (y / 0.135);
+      p.setXYZ(i, p.getX(i) * k, y * 1.25, p.getZ(i) * k);
+    }
+    g.computeVertexNormals();
+    return g;
+  })();
+  GEO.butter = rbox(0.34, 0.15, 0.2, 0.035);
+  GEO.butterWrap = rbox(0.18, 0.162, 0.212, 0.035);
+  GEO.butterBand = rbox(0.184, 0.05, 0.216, 0.02);
+  GEO.bottle = lathe([[0, 0], [0.11, 0], [0.125, 0.015], [0.13, 0.05], [0.13, 0.24], [0.115, 0.3], [0.08, 0.345],
+    [0.066, 0.37], [0.066, 0.4], [0, 0.4]], 24).translate(0, -0.2, 0);
+  GEO.cap = new THREE.CylinderGeometry(0.075, 0.075, 0.05, 18);
+  GEO.bottleBand = new THREE.CylinderGeometry(0.134, 0.134, 0.09, 24);
+  GEO.cube = rbox(0.24, 0.24, 0.24, 0.05);
+  GEO.choc = rbox(0.36, 0.07, 0.24, 0.02);
+  GEO.chocWrap = rbox(0.17, 0.08, 0.25, 0.02);
+  GEO.foil = rbox(0.025, 0.084, 0.254, 0.01);
+  MAT.choc = new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.choc });
+  GEO.berry = lathe([[0, 0], [0.035, 0.012], [0.075, 0.045], [0.11, 0.1], [0.125, 0.15], [0.115, 0.19], [0.075, 0.215], [0, 0.222]], 20).translate(0, -0.115, 0);
+  GEO.leaf = new THREE.SphereGeometry(0.045, 10, 6).scale(1.7, 0.35, 0.8);
+  GEO.stem = new THREE.CylinderGeometry(0.011, 0.014, 0.06, 6);
+  MAT.berry = new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.berry });
+  MAT.leaf = toon(0x6DB04F);
+  GEO.stick = new THREE.CylinderGeometry(0.036, 0.036, 0.36, 12).rotateZ(Math.PI / 2);
+  GEO.stickTie = new THREE.TorusGeometry(0.052, 0.013, 6, 16).rotateY(Math.PI / 2).scale(1, 1, 1.6);
+
+  GEO.toast = (() => {
+    const s = new THREE.Shape();
+    s.moveTo(-0.19, 0.03); s.quadraticCurveTo(-0.19, 0, -0.16, 0); s.lineTo(0.16, 0); s.quadraticCurveTo(0.19, 0, 0.19, 0.03);
+    s.lineTo(0.19, 0.25);
+    s.bezierCurveTo(0.27, 0.27, 0.26, 0.43, 0, 0.43);
+    s.bezierCurveTo(-0.26, 0.43, -0.27, 0.27, -0.19, 0.25);
+    s.closePath();
+    const g = new THREE.ExtrudeGeometry(s, { depth: 0.3, bevelEnabled: true, bevelThickness: 0.035, bevelSize: 0.03, bevelSegments: 3, curveSegments: 16 });
+    g.center();
+    return g;
+  })();
+  GEO.baguette = new THREE.CapsuleGeometry(0.1, 0.6, 6, 16).rotateZ(Math.PI / 2).scale(1, 0.84, 1);
+  GEO.score = new THREE.CapsuleGeometry(0.02, 0.11, 3, 8).rotateZ(Math.PI / 2);
+  GEO.croissant = crescentGeometry();
+  GEO.cookie = lathe([[0, 0], [0.17, 0], [0.195, 0.012], [0.205, 0.035], [0.195, 0.058], [0.15, 0.072], [0, 0.078]], 28).translate(0, -0.039, 0);
+  GEO.chip = rbox(0.045, 0.03, 0.045, 0.012);
+  GEO.donut = new THREE.TorusGeometry(0.15, 0.075, 14, 28).rotateX(Math.PI / 2);
+  GEO.glaze = (() => {
+    const g = new THREE.TorusGeometry(0.15, 0.08, 14, 28).rotateX(Math.PI / 2), p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) if (p.getY(i) < 0) p.setY(i, p.getY(i) * 0.2);
+    g.translate(0, 0.012, 0);
+    g.computeVertexNormals();
+    return g;
+  })();
+  GEO.sprinkle = new THREE.CapsuleGeometry(0.009, 0.03, 2, 6).rotateZ(Math.PI / 2);
+  GEO.roll = new THREE.CylinderGeometry(0.19, 0.2, 0.13, 28);
+  GEO.icing = new THREE.SphereGeometry(0.13, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.32, 1);
+  GEO.sponge = new THREE.CylinderGeometry(0.235, 0.24, 0.2, 32);
+  GEO.cakeBase = new THREE.CylinderGeometry(0.235, 0.24, 0.18, 32);
+  GEO.cakeJam = new THREE.CylinderGeometry(0.243, 0.243, 0.03, 32);
+  GEO.cakeCream = new THREE.CylinderGeometry(0.248, 0.248, 0.07, 32);
+  GEO.dollop = new THREE.SphereGeometry(0.042, 10, 8);
+  GEO.coin = new THREE.CylinderGeometry(0.11, 0.11, 0.035, 20);
+  GEO.coinFace = new THREE.CylinderGeometry(0.068, 0.068, 0.04, 16);
+}
+
+// A tiny kawaii face (eyes, blush, smile) facing +z
+function faceOn(parent, x, y, z, s = 1, ry = 0) {
+  const f = new THREE.Group();
+  f.position.set(x, y, z); f.rotation.y = ry; f.scale.setScalar(s);
+  for (const sx of [-1, 1]) {
+    const e = new THREE.Mesh(GEO.eye, MAT.eye); e.position.set(sx * 0.065, 0.02, 0); f.add(e);
+    const b = new THREE.Mesh(GEO.blush, MAT.blush); b.position.set(sx * 0.115, -0.028, 0.004); f.add(b);
+  }
+  const m = new THREE.Mesh(GEO.smile, MAT.eye); m.position.set(0, -0.01, 0.004); f.add(m);
+  parent.add(f);
+  return f;
+}
+function addBerry(parent, s = 1, x = 0, y = 0, z = 0) {
+  const b = new THREE.Group();
+  b.position.set(x, y, z); b.scale.setScalar(s);
+  b.add(mesh(GEO.berry, MAT.berry));
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const l = mesh(GEO.leaf, MAT.leaf, { outline: 'thin' });
+    l.position.set(Math.cos(a) * 0.05, 0.1, Math.sin(a) * 0.05);
+    l.rotation.set(0, -a, -0.35);
+    b.add(l);
+  }
+  const st = mesh(GEO.stem, MAT.leaf, { outline: 'thin' }); st.position.y = 0.13; b.add(st);
+  parent.add(b);
+  return b;
+}
+const CHIPS = [[0.07, 0.05], [-0.08, 0.07], [0.02, -0.09], [-0.11, -0.04], [0.12, -0.05], [-0.02, 0.13], [0.0, 0.0]];
+
+// Each builder returns { g: group, shape: physics shape (unscaled), rest: half-height when upright }
+const MODELS = {
+  flour() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.sack, MAT.sack));
+    const tie = mesh(GEO.sackTie, toon(0xB0703A), { outline: 'thin' }); tie.position.y = 0.17; g.add(tie);
+    return { g, shape: { t: 'box', h: [0.2, 0.24, 0.2] }, rest: 0.24 };
+  },
+  milk() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.bottle, toon(0xFFFFFF)));
+    const cap = mesh(GEO.cap, toon(0x4F7FCB)); cap.position.y = 0.19; g.add(cap);
+    const band = mesh(GEO.bottleBand, toon(0x86B0E3), { outline: 'thin' }); band.position.y = -0.05; g.add(band);
+    return { g, shape: { t: 'box', h: [0.13, 0.2, 0.13] }, rest: 0.2 };
+  },
+  butter() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.butter, toon(0xFFD966)));
+    const w = mesh(GEO.butterWrap, toon(0xFFFDF7)); w.position.x = 0.085; g.add(w);
+    const b = mesh(GEO.butterBand, toon(0x6E9BD6), { outline: 'thin' }); b.position.x = 0.085; g.add(b);
+    return { g, shape: { t: 'box', h: [0.17, 0.08, 0.105] }, rest: 0.08 };
+  },
+  egg() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.egg, toon(0xFFF3E2)));
+    return { g, shape: { t: 'multi', parts: [{ r: 0.13, o: [0, -0.035, 0] }, { r: 0.112, o: [0, 0.048, 0] }], rad: 0.17 }, rest: 0.165 };
+  },
+  sugar() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.cube, toon(0xFBFCFF)));
+    return { g, shape: { t: 'box', h: [0.12, 0.12, 0.12] }, rest: 0.12 };
+  },
+  chocolate() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.choc, MAT.choc));
+    const w = mesh(GEO.chocWrap, toon(0xD9534F)); w.position.x = 0.1; g.add(w);
+    const f = mesh(GEO.foil, toon(0xF2C14E), { outline: 'thin' }); f.position.x = 0.013; g.add(f);
+    return { g, shape: { t: 'box', h: [0.18, 0.04, 0.125] }, rest: 0.04 };
+  },
+  strawberry() {
+    const g = new THREE.Group();
+    addBerry(g);
+    return { g, shape: { t: 'sphere', r: 0.115 }, rest: 0.115 };
+  },
+  cinnamon() {
+    const g = new THREE.Group();
+    for (const z of [-0.04, 0.04]) { const s = mesh(GEO.stick, toon(0xA0562E)); s.position.z = z; g.add(s); }
+    g.add(mesh(GEO.stickTie, toon(0xF3E3C3), { outline: 'thin' }));
+    return { g, shape: { t: 'box', h: [0.18, 0.045, 0.085] }, rest: 0.045 };
+  },
+  toast() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.toast, [bakeMat(0xFAEBCB, 0xFCE3B4, 0x5E4230), bakeMat(0xF2DAAB, 0xDD8C3C)]));
+    faceOn(g, 0, -0.045, 0.186, 1.15);
+    return { g, shape: { t: 'box', h: [0.285, 0.245, 0.185] }, rest: 0.245 };
+  },
+  baguette() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.baguette, bakeMat(0xF5E2BC, 0xD9893A)));
+    const sm = bakeMat(0xF8EBCF, 0xF6D08E, 0x4E3A2A);
+    for (const x of [-0.22, -0.075, 0.075, 0.22]) {
+      const s = mesh(GEO.score, sm, { outline: 'thin' }); s.position.set(x, 0.074, 0); s.rotation.y = 0.65; g.add(s);
+    }
+    return { g, shape: { t: 'multi', parts: [-0.3, -0.1, 0.1, 0.3].map((x) => ({ r: 0.09, o: [x, 0, 0] })), rad: 0.4 }, rest: 0.085 };
+  },
+  croissant() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.croissant, bakeMat(0xF6E1B8, 0xE8923A)));
+    return { g, shape: { t: 'multi', parts: GEO.croissant.userData.spheres, rad: 0.3 }, rest: 0.08 };
+  },
+  cookie() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.cookie, bakeMat(0xF4DDB0, 0xD99A52)));
+    for (const [x, z] of CHIPS) {
+      const c = mesh(GEO.chip, toon(0x5B3320), { outline: 'thin' });
+      c.position.set(x, 0.037, z); c.rotation.y = x * 20; g.add(c);
+    }
+    return { g, shape: { t: 'cyl', r: 0.205, h: 0.078 }, rest: 0.039 };
+  },
+  donut() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.donut, bakeMat(0xF3DDB2, 0xE3A456)));
+    const glaze = mesh(GEO.glaze, fixedMat(0xF59BB5), { outline: 'thin' });
+    glaze.userData.topping = true; g.add(glaze);
+    const cols = [0xFFFFFF, 0xFFE066, 0x7EC8F2, 0x9BD77A, 0xFFB26B];
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + 0.2, d = [-0.03, 0, 0.03][i % 3];
+      const s = new THREE.Mesh(GEO.sprinkle, toon(cols[i % cols.length]));
+      s.position.set(Math.cos(a) * (0.15 + d), 0.01 + Math.sqrt(0.08 * 0.08 - d * d), Math.sin(a) * (0.15 + d));
+      s.rotation.y = a * 3.1;
+      s.userData.topping = true; g.add(s);
+    }
+    return { g, shape: { t: 'cyl', r: 0.225, h: 0.15 }, rest: 0.075 };
+  },
+  roll() {
+    const g = new THREE.Group();
+    const side = bakeMat(0xF4DDB2, 0xD4883F), top = bakeMat(0xF4DDB2, 0xD4883F, 0x3A281D, { map: TEX.spiral });
+    g.add(mesh(GEO.roll, [side, top, side]));
+    const ic = mesh(GEO.icing, fixedMat(0xFFF8EC), { outline: 'thin' });
+    ic.position.y = 0.064; ic.userData.topping = true; g.add(ic);
+    return { g, shape: { t: 'cyl', r: 0.2, h: 0.13 }, rest: 0.065 };
+  },
+  sponge() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.sponge, bakeMat(0xF6E4B6, 0xEFB356)));
+    return { g, shape: { t: 'cyl', r: 0.24, h: 0.2 }, rest: 0.1 };
+  },
+  cake() {
+    const g = new THREE.Group();
+    const base = mesh(GEO.cakeBase, fixedMat(0xEFB356)); base.position.y = -0.04; g.add(base);
+    const jam = mesh(GEO.cakeJam, fixedMat(0xE35D6A), { outline: 'thin' }); jam.position.y = -0.045; g.add(jam);
+    const cream = mesh(GEO.cakeCream, fixedMat(0xFFF7EC)); cream.position.y = 0.085; g.add(cream);
+    const dm = fixedMat(0xFFFFFF);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const d = mesh(GEO.dollop, dm, { outline: 'thin' }); d.position.set(Math.cos(a) * 0.19, 0.13, Math.sin(a) * 0.19); g.add(d);
+    }
+    addBerry(g, 0.62, 0, 0.19, 0);
+    addBerry(g, 0.5, 0.08, 0.17, 0.05).rotation.z = -0.5;
+    addBerry(g, 0.5, -0.07, 0.17, -0.06).rotation.x = -0.5;
+    return { g, shape: { t: 'cyl', r: 0.25, h: 0.26 }, rest: 0.13 };
+  },
+  coin() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.coin, toon(0xF6C744), { outline: 'thin' }));
+    g.add(mesh(GEO.coinFace, toon(0xE8AC2E), { outline: false }));
+    return { g, shape: { t: 'cyl', r: 0.11, h: 0.035 }, rest: 0.02 };
+  },
+};
+
+/* =====================================================================
+   Physics world
+   ===================================================================== */
+const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -18, 0), allowSleep: true });
+world.broadphase = new CANNON.SAPBroadphase(world);
+world.solver.iterations = 12;
+world.defaultContactMaterial.friction = 0.45;
+world.defaultContactMaterial.restitution = 0.15;
+const PM = { item: new CANNON.Material('item'), stat: new CANNON.Material('static') };
+world.addContactMaterial(new CANNON.ContactMaterial(PM.item, PM.stat, { friction: 0.5, restitution: 0.22 }));
+world.addContactMaterial(new CANNON.ContactMaterial(PM.item, PM.item, { friction: 0.55, restitution: 0.12 }));
+
+const GRP = { STATIC: 1, ITEM: 2, HELD: 4, BOUND: 8, CUST: 16, COIN: 32 };
+const MASK = {
+  STATIC: GRP.ITEM | GRP.HELD | GRP.COIN,
+  ITEM: GRP.STATIC | GRP.BOUND | GRP.ITEM | GRP.HELD | GRP.CUST | GRP.COIN,
+  COIN: GRP.STATIC | GRP.BOUND | GRP.ITEM | GRP.HELD | GRP.COIN,
+  CUST: GRP.ITEM | GRP.HELD,
+};
+function staticBody(group = GRP.STATIC) {
+  return new CANNON.Body({ mass: 0, type: CANNON.Body.STATIC, material: PM.stat, collisionFilterGroup: group, collisionFilterMask: MASK.STATIC });
+}
+function colBox(x, y, z, hx, hy, hz, { group = GRP.STATIC, ry = 0 } = {}) {
+  const b = staticBody(group);
+  b.addShape(new CANNON.Box(new CANNON.Vec3(hx, hy, hz)));
+  b.position.set(x, y, z);
+  if (ry) b.quaternion.setFromEuler(0, ry, 0);
+  world.addBody(b);
+  return b;
+}
+function colCompound(x, y, z, parts) {
+  const b = staticBody();
+  for (const [s, o, q] of parts) b.addShape(s, new CANNON.Vec3(o[0], o[1], o[2]), q);
+  b.position.set(x, y, z);
+  world.addBody(b);
+  return b;
+}
+
+/* =====================================================================
+   Drop zones (oven, bowl, bin, customers)
+   ===================================================================== */
+const zones = [];
+const HIDDEN = new THREE.MeshBasicMaterial({ visible: false });
+function makeZone(geo, x, y, z, def, parent = scene) {
+  const m = new THREE.Mesh(geo, HIDDEN);
+  m.position.set(x, y, z);
+  m.userData.zone = def;
+  parent.add(m);
+  zones.push(m);
+  def.mesh = m;
+  return def;
+}
+
+/* =====================================================================
+   The bakery interior
+   ===================================================================== */
+const WAIN_H = 1.3, WALL_H = 4.2, COUNTER_H = 0.82;
+const OVEN = { zc: -2.4, front: -3.74, slots: [] };
+const BOWL = { pos: new THREE.Vector3(-2.1, 1.0, 1.45), contents: [], mixing: 0, sig: '' };
+const TRASH = { pos: new THREE.Vector3(-0.35, 0, 3.75) };
+const DOOR = { x: 4.4, angle: 0 };
+const DECOR = {};
+const CLOCK = {};
+const CAT = { t: 0 };
+const SOURCES = [
+  { key: 'flour',      pos: [-5.0, 1.0, -0.25] },
+  { key: 'milk',       pos: [-5.0, 1.0, 0.8] },
+  { key: 'butter',     pos: [-5.0, 1.0, 1.85] },
+  { key: 'egg',        pos: [-5.0, 1.0, 2.85] },
+  { key: 'strawberry', pos: [-5.0, 1.0, 3.85] },
+  { key: 'sugar',      pos: [-5.2, 2.24, 0.15] },
+  { key: 'chocolate',  pos: [-5.2, 2.24, 1.6] },
+  { key: 'cinnamon',   pos: [-5.2, 2.24, 3.05] },
+];
+
+function wallPiece(cx, cz, sx, sz, y0, y1) {
+  const long = Math.max(sx, sz), alongX = sx > sz;
+  if (y0 < WAIN_H) {
+    const h = Math.min(y1, WAIN_H) - y0;
+    P(rbox(sx, h, sz, 0.02), texMat(TEX.wain, long / 1.1, 1), cx, y0 + h / 2, cz, { cast: false });
+  }
+  if (y1 > WAIN_H) {
+    const b = Math.max(y0, WAIN_H), h = y1 - b;
+    P(rbox(sx, h, sz, 0.02), texMat(TEX.wall, long / 2.2, h / 2.2), cx, b + h / 2, cz, { cast: false });
+  }
+  if (y0 < WAIN_H && y1 > WAIN_H) {
+    P(rbox(alongX ? sx : sx + 0.14, 0.13, alongX ? sz + 0.14 : sz, 0.04), 0xFFF0D2,
+      cx + (alongX ? 0 : 0.07), WAIN_H, cz + (alongX ? 0.07 : 0), { cast: false });
+  }
+  colBox(cx, (y0 + y1) / 2, cz, sx / 2, (y1 - y0) / 2, sz / 2);
+}
+
+function buildShell() {
+  // diorama base + floor
+  const floorMat = new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.floor });
+  const slabMat = texMat(TEX.slab, 6, 1);
+  const slab = mesh(new THREE.BoxGeometry(11.8, 0.5, 9.8), [slabMat, slabMat, floorMat, slabMat, slabMat, slabMat], { cast: false });
+  slab.position.set(0, -0.25, 0);
+  scene.add(slab);
+  colBox(0, -0.25, 0, 5.9, 0.25, 4.9);
+
+  // walls (left wall runs along z, right wall along x with a door gap)
+  wallPiece(-5.7, 0, 0.4, 9.8, 0, WALL_H);
+  wallPiece(-1.05, -4.7, 9.7, 0.4, 0, WALL_H);
+  wallPiece(5.45, -4.7, 0.9, 0.4, 0, WALL_H);
+  wallPiece(4.4, -4.7, 1.2, 0.4, 2.5, WALL_H);
+  P(rbox(0.6, 0.18, 10.0, 0.07), 0xE08E45, -5.7, WALL_H + 0.06, 0, { cast: false });
+  P(rbox(12.0, 0.18, 0.6, 0.07), 0xE08E45, 0, WALL_H + 0.06, -4.7, { cast: false });
+
+  // invisible walls so things can't be thrown out of the room
+  const bo = { group: GRP.BOUND };
+  colBox(6.15, 4.5, 0, 0.25, 4.5, 5.4, bo);
+  colBox(0, 4.5, 5.15, 6.4, 4.5, 0.25, bo);
+  colBox(-5.7, 7.0, 0, 0.2, 2.8, 5.4, bo);
+  colBox(0, 7.0, -4.7, 6.4, 2.8, 0.2, bo);
+  colBox(DOOR.x, 1.25, -4.7, 0.62, 1.25, 0.2, bo);
+  colBox(0, 9.9, 0, 6.4, 0.2, 5.4, bo);
+
+  // doorway, outside view and the door on its hinge
+  const outside = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.9), new THREE.MeshBasicMaterial({ map: TEX.view }));
+  outside.position.set(DOOR.x, 1.35, -5.5);
+  scene.add(outside);
+  P(rbox(1.5, 0.12, 0.9, 0.03), 0xD9C7A8, DOOR.x, -0.05, -5.25, { cast: false });
+  P(rbox(0.14, 2.64, 0.52, 0.04), 0xB9723E, 3.73, 1.32, -4.68);
+  P(rbox(0.14, 2.64, 0.52, 0.04), 0xB9723E, 5.07, 1.32, -4.68);
+  P(rbox(1.5, 0.16, 0.52, 0.04), 0xB9723E, DOOR.x, 2.58, -4.68);
+  DOOR.pivot = new THREE.Group();
+  DOOR.pivot.position.set(5.0, 0, -4.62);
+  scene.add(DOOR.pivot);
+  P(rbox(1.2, 2.46, 0.09, 0.03), 0xA7663B, -0.6, 1.24, 0, { parent: DOOR.pivot });
+  P(rbox(0.86, 0.86, 0.1, 0.03), 0x94582F, -0.6, 0.62, 0.012, { parent: DOOR.pivot, outline: 'thin' });
+  P(new THREE.CylinderGeometry(0.24, 0.24, 0.11, 24), 0xCFE9F2, -0.6, 1.72, 0, { parent: DOOR.pivot, rx: Math.PI / 2 });
+  P(new THREE.SphereGeometry(0.06, 12, 10), 0xF3C04E, -1.05, 1.15, 0.08, { parent: DOOR.pivot });
+  P(rbox(1.1, 0.03, 0.66, 0.01), 0xC96F4A, DOOR.x, 0.015, -4.05, { cast: false, outline: 'thin' });
+  P(rbox(0.86, 0.035, 0.44, 0.01), 0xE9A57E, DOOR.x, 0.02, -4.05, { cast: false, outline: false });
+
+  // bell over the door (upgrade)
+  DECOR.bell = new THREE.Group();
+  DECOR.bell.position.set(DOOR.x, 2.95, -4.36);
+  scene.add(DECOR.bell);
+  P(rbox(0.06, 0.26, 0.06, 0.02), 0x8A5A3B, 0, 0.12, -0.08, { parent: DECOR.bell, outline: 'thin' });
+  DECOR.bellCup = P(lathe([[0, -0.2], [0.14, -0.2], [0.13, -0.16], [0.09, -0.06], [0.06, 0.02], [0, 0.03]], 18), 0xF3C04E, 0, 0, 0, { parent: DECOR.bell });
+
+  // menu board
+  P(rbox(1.95, 1.75, 0.12, 0.05), 0x8A5A3B, -3.85, 2.55, -4.44);
+  const menu = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.5), new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.menu }));
+  menu.position.set(-3.85, 2.55, -4.37);
+  scene.add(menu);
+
+  // window with curtains
+  const wx = -1.45, wy = 2.62, wz = -4.44;
+  P(rbox(2.2, 1.7, 0.14, 0.06), 0xFFF6E6, wx, wy, wz, { cast: false });
+  const pane = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.4), new THREE.MeshBasicMaterial({ map: TEX.view }));
+  pane.position.set(wx, wy, wz + 0.075);
+  scene.add(pane);
+  P(rbox(0.07, 1.42, 0.06, 0.02), 0xFFF6E6, wx, wy, wz + 0.1, { outline: 'thin', cast: false });
+  P(rbox(1.92, 0.07, 0.06, 0.02), 0xFFF6E6, wx, wy + 0.1, wz + 0.1, { outline: 'thin', cast: false });
+  P(rbox(2.5, 0.1, 0.34, 0.04), 0xE9B27A, wx, wy - 0.87, wz + 0.12);
+  for (const sx of [-1, 1]) for (let k = 0; k < 3; k++) {
+    P(new THREE.CapsuleGeometry(0.075, 1.3, 4, 10), 0xF6CD6E, wx + sx * (1.02 + k * 0.1), wy + 0.02, wz + 0.2 - k * 0.03,
+      { outline: k === 0 ? true : 'thin', cast: false });
+  }
+  P(rbox(2.7, 0.16, 0.2, 0.05), 0xF6CD6E, wx, wy + 0.9, wz + 0.22, { cast: false });
+  const scallop = new THREE.ExtrudeGeometry(new THREE.Shape().absarc(0, 0, 0.17, Math.PI, Math.PI * 2, false), { depth: 0.04, bevelEnabled: false });
+  for (let i = 0; i < 8; i++) P(scallop, i % 2 ? 0xFFF4DA : 0xF6CD6E, wx - 1.18 + i * 0.337, wy + 0.83, wz + 0.3, { outline: 'thin', cast: false });
+
+  // sign
+  P(rbox(2.7, 0.8, 0.12, 0.05), 0x6E4027, 1.95, 3.45, -4.43, { cast: false });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.56, 0.64), new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.sign }));
+  sign.position.set(1.95, 3.45, -4.365);
+  scene.add(sign);
+
+  // wall lamps
+  for (const lx of [0.25, 3.45]) {
+    P(rbox(0.12, 0.3, 0.08, 0.03), 0x8A5A3B, lx, 3.05, -4.46, { cast: false });
+    P(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8), 0x8A5A3B, lx, 3.12, -4.32, { rx: Math.PI / 2, outline: 'thin', cast: false });
+    P(new THREE.ConeGeometry(0.2, 0.22, 18), 0xF0A04B, lx, 3.08, -4.18, { cast: false });
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), new THREE.MeshBasicMaterial({ color: 0xFFE9A8 }));
+    bulb.position.set(lx, 2.94, -4.18);
+    scene.add(bulb);
+  }
+
+  // round window + clock on the left wall
+  const rw = new THREE.Group();
+  rw.position.set(-5.47, 3.3, 1.0); rw.rotation.y = Math.PI / 2; scene.add(rw);
+  const rv = new THREE.Mesh(new THREE.CircleGeometry(0.5, 32), new THREE.MeshBasicMaterial({ map: TEX.view }));
+  rw.add(rv);
+  P(new THREE.TorusGeometry(0.52, 0.08, 10, 36), 0xFFF6E6, 0, 0, 0.02, { parent: rw, cast: false });
+  P(rbox(0.06, 1.0, 0.04, 0.015), 0xFFF6E6, 0, 0, 0.03, { parent: rw, outline: 'thin', cast: false });
+  P(rbox(1.0, 0.06, 0.04, 0.015), 0xFFF6E6, 0, 0, 0.03, { parent: rw, outline: 'thin', cast: false });
+  const cl = new THREE.Group();
+  cl.position.set(-5.44, 3.3, 3.25); cl.rotation.y = Math.PI / 2; scene.add(cl);
+  P(new THREE.CylinderGeometry(0.4, 0.4, 0.1, 32), 0xE38F45, 0, 0, 0, { parent: cl, rx: Math.PI / 2, cast: false });
+  const cf = new THREE.Mesh(new THREE.CircleGeometry(0.33, 32), new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.clock }));
+  cf.position.z = 0.056; cl.add(cf);
+  const hand = (len, w) => {
+    const pv = new THREE.Group(); pv.position.z = 0.07; cl.add(pv);
+    const hm = new THREE.Mesh(new THREE.BoxGeometry(w, len, 0.01), MAT.eye); hm.position.y = len / 2 - 0.03; pv.add(hm);
+    return pv;
+  };
+  CLOCK.h = hand(0.19, 0.035);
+  CLOCK.m = hand(0.27, 0.025);
+}
+
+function buildOven() {
+  const { zc, front } = OVEN;
+  const s = new THREE.Shape();
+  s.moveTo(-1.3, 0); s.lineTo(1.3, 0); s.lineTo(1.3, 2.05);
+  s.bezierCurveTo(1.62, 2.2, 1.5, 3.4, 0, 3.4);
+  s.bezierCurveTo(-1.5, 3.4, -1.62, 2.2, -1.3, 2.05);
+  s.lineTo(-1.3, 0);
+  const mouth = new THREE.Path();
+  mouth.moveTo(-1.05, 1.0); mouth.lineTo(1.05, 1.0); mouth.lineTo(1.05, 1.5);
+  mouth.absarc(0, 1.5, 1.05, 0, Math.PI, false); mouth.lineTo(-1.05, 1.0);
+  const fire = new THREE.Path();
+  fire.moveTo(-0.45, 0.14); fire.lineTo(0.45, 0.14); fire.lineTo(0.45, 0.4);
+  fire.absarc(0, 0.4, 0.45, 0, Math.PI, false); fire.lineTo(-0.45, 0.14);
+  s.holes.push(mouth, fire);
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 1.62, bevelEnabled: true, bevelThickness: 0.07, bevelSize: 0.06, bevelSegments: 2, curveSegments: 22 });
+  geo.rotateY(Math.PI / 2);
+  geo.translate(front - 1.69, 0, zc);
+  OVEN.mesh = P(geo, [toon(0xFCE6BD), toon(0xE8953F)], 0, 0, 0);
+
+  // glowing inside, tray, firewood
+  OVEN.glowMat = new THREE.MeshBasicMaterial({ map: TEX.glow, color: 0x9A7A66 });
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.7), OVEN.glowMat);
+  glow.rotation.y = Math.PI / 2; glow.position.set(front - 1.25, 1.8, zc);
+  scene.add(glow);
+  P(rbox(0.95, 0.05, 2.02, 0.02), 0x6B5A4E, front - 0.5, 1.02, zc, { outline: 'thin' });
+  for (const [ly, lz] of [[0.26, -0.17], [0.26, 0.17], [0.44, 0]]) {
+    P(new THREE.CylinderGeometry(0.09, 0.09, 0.55, 12), 0x8B5A33, front - 0.4, ly, zc + lz, { rz: Math.PI / 2, outline: 'thin' });
+  }
+
+  // cute face
+  OVEN.face = new THREE.Group();
+  OVEN.face.position.set(front + 0.012, 2.86, zc); OVEN.face.rotation.y = Math.PI / 2;
+  scene.add(OVEN.face);
+  OVEN.eyeOpen = new THREE.Group(); OVEN.eyeHappy = new THREE.Group();
+  const eg = new THREE.SphereGeometry(0.085, 14, 10).scale(1, 1.3, 0.35);
+  const hg = new THREE.TorusGeometry(0.08, 0.024, 6, 14, Math.PI);
+  for (const sx of [-1, 1]) {
+    const e = new THREE.Mesh(eg, MAT.eye); e.position.set(sx * 0.36, 0, 0); OVEN.eyeOpen.add(e);
+    const h = new THREE.Mesh(hg, MAT.eye); h.position.set(sx * 0.36, -0.04, 0.01); OVEN.eyeHappy.add(h);
+    const b = new THREE.Mesh(new THREE.CircleGeometry(0.11, 18), MAT.blush); b.position.set(sx * 0.66, -0.17, 0.012); OVEN.face.add(b);
+  }
+  OVEN.face.add(OVEN.eyeOpen, OVEN.eyeHappy);
+  OVEN.eyeHappy.visible = false;
+
+  // chimney
+  P(new THREE.CylinderGeometry(0.2, 0.22, 1.5, 16), 0x86695A, front - 1.1, 3.55, zc - 0.55);
+  P(new THREE.CylinderGeometry(0.27, 0.27, 0.14, 16), 0x6E5446, front - 1.1, 4.3, zc - 0.55);
+  OVEN.chimney = new THREE.Vector3(front - 1.1, 4.5, zc - 0.55);
+
+  OVEN.light = new THREE.PointLight(0xFF9A3C, 0, 4.5, 1.6);
+  OVEN.light.position.set(front - 0.5, 1.8, zc);
+  scene.add(OVEN.light);
+
+  OVEN.slots = [-0.72, -0.05, 0.62].map((dz) => ({ pos: new THREE.Vector3(front - 0.42, 1.045, zc + dz), item: null, ring: null }));
+
+  // colliders
+  const hx = 0.88, cx = front - hx;
+  colBox(cx, 0.5, zc, hx, 0.5, 1.3);
+  colBox(cx, 1.5, zc - 1.18, hx, 0.5, 0.12);
+  colBox(cx, 1.5, zc + 1.18, hx, 0.5, 0.12);
+  colCompound(cx, 2.05, zc, [[new CANNON.Cylinder(1.36, 1.36, 2 * hx, 16), [0, 0, 0], new CANNON.Quaternion().setFromEuler(0, 0, Math.PI / 2)]]);
+  colBox(front + 0.02, 1.8, zc, 0.06, 0.8, 1.05);
+}
+
+const SOURCE_BUILD = {
+  flour(g, x, y, z) {
+    for (const dz of [-0.2, 0.2]) {
+      const s = MODELS.flour().g; s.scale.setScalar(1.05); s.position.set(0, 0.25, dz); s.rotation.y = dz * 3; g.add(s);
+    }
+    const top = MODELS.flour().g; top.position.set(0.03, 0.69, 0); top.rotation.set(Math.PI / 2 - 0.15, 0, 0.2); g.add(top);
+    colBox(x, y + 0.4, z, 0.25, 0.4, 0.45);
+  },
+  milk(g, x, y, z) {
+    const wood = 0xC9884E;
+    P(rbox(0.72, 0.05, 0.72, 0.02), wood, 0, 0.025, 0, { parent: g });
+    for (const s of [-1, 1]) {
+      P(rbox(0.72, 0.28, 0.05, 0.02), wood, 0, 0.14, s * 0.335, { parent: g });
+      P(rbox(0.05, 0.28, 0.72, 0.02), wood, s * 0.335, 0.14, 0, { parent: g });
+    }
+    for (const bx of [-0.15, 0.15]) for (const bz of [-0.15, 0.15]) {
+      const b = MODELS.milk().g; b.position.set(bx, 0.25, bz); g.add(b);
+    }
+    colBox(x, y + 0.2, z, 0.37, 0.2, 0.37);
+  },
+  butter(g, x, y, z) {
+    P(new THREE.CylinderGeometry(0.36, 0.3, 0.05, 28), 0xFFF8EE, 0, 0.025, 0, { parent: g });
+    P(new THREE.TorusGeometry(0.33, 0.02, 6, 28), 0x6E9BD6, 0, 0.05, 0, { parent: g, rx: Math.PI / 2, outline: 'thin' });
+    const a = MODELS.butter().g; a.scale.setScalar(1.15); a.position.set(0, 0.14, 0); a.rotation.y = 0.3; g.add(a);
+    const b = MODELS.butter().g; b.scale.setScalar(1.15); b.position.set(0.02, 0.315, 0.02); b.rotation.y = -0.4; g.add(b);
+    colBox(x, y + 0.2, z, 0.3, 0.2, 0.3);
+  },
+  egg(g, x, y, z) {
+    P(lathe([[0, 0], [0.26, 0], [0.34, 0.2], [0.36, 0.26], [0.33, 0.27], [0.3, 0.22], [0.24, 0.05], [0, 0.05]], 28), 0xC98B4E, 0, 0, 0, { parent: g });
+    P(new THREE.TorusGeometry(0.34, 0.028, 8, 24, Math.PI), 0xB5773F, 0, 0.26, 0, { parent: g, outline: 'thin' });
+    [[0, 0.2, 0], [0.13, 0.17, 0.08], [-0.13, 0.17, 0.06], [0.05, 0.16, -0.14], [-0.07, 0.29, -0.04]].forEach(([ex, ey, ez], i) => {
+      const e = MODELS.egg().g; e.position.set(ex, ey, ez); e.rotation.set(i * 0.5, i, 0.3 * i); g.add(e);
+    });
+    colBox(x, y + 0.18, z, 0.35, 0.18, 0.35);
+  },
+  strawberry(g, x, y, z) {
+    P(lathe([[0, 0], [0.24, 0], [0.3, 0.16], [0.31, 0.2], [0.28, 0.2], [0.25, 0.16], [0.2, 0.04], [0, 0.04]], 24), 0xF19C9C, 0, 0, 0, { parent: g });
+    [[0, 0.15, 0], [0.12, 0.13, 0.07], [-0.11, 0.13, 0.05], [0.04, 0.12, -0.13], [-0.03, 0.25, 0.02]].forEach(([bx, by, bz], i) => {
+      addBerry(g, 1, bx, by, bz).rotation.set(0.3 * i, i, -0.4 + 0.2 * i);
+    });
+    colBox(x, y + 0.15, z, 0.31, 0.15, 0.31);
+  },
+  sugar(g, x, y, z) {
+    jar(g, TEX.sugarLabel);
+    for (const [cx, cy, cz, r] of [[0.03, 0.42, 0.02, 0.3], [-0.06, 0.4, -0.06, 0.9], [0.07, 0.38, -0.08, 1.4]]) {
+      const c = P(GEO.cube, 0xFBFCFF, cx, cy, cz, { parent: g, ry: r, rx: r * 0.5 }); c.scale.setScalar(0.72);
+    }
+    colBox(x, y + 0.2, z, 0.22, 0.2, 0.22);
+  },
+  chocolate(g, x, y, z) {
+    P(rbox(0.6, 0.05, 0.44, 0.02), 0xB5773F, 0, 0.025, 0, { parent: g });
+    for (let i = 0; i < 3; i++) {
+      const c = MODELS.chocolate().g; c.scale.setScalar(1.1); c.position.set(0, 0.095 + i * 0.085, 0); c.rotation.y = (i - 1) * 0.25; g.add(c);
+    }
+    colBox(x, y + 0.17, z, 0.3, 0.17, 0.22);
+  },
+  cinnamon(g, x, y, z) {
+    jar(g, TEX.cinnLabel);
+    for (let i = 0; i < 4; i++) {
+      const s = mesh(GEO.stick, toon(0xA0562E));
+      s.rotation.z = Math.PI / 2 + (i - 1.5) * 0.12;
+      s.position.set(((i % 2) - 0.5) * 0.08, 0.42, (i < 2 ? -1 : 1) * 0.05);
+      g.add(s);
+    }
+    colBox(x, y + 0.2, z, 0.22, 0.2, 0.22);
+  },
+};
+function jar(g, labelTexture) {
+  P(lathe([[0, 0], [0.19, 0], [0.21, 0.03], [0.21, 0.36], [0.2, 0.4], [0.17, 0.4], [0.165, 0.37], [0.165, 0.05], [0, 0.05]], 28), 0xE4F0EC, 0, 0, 0, { parent: g });
+  P(new THREE.TorusGeometry(0.2, 0.025, 8, 28), 0x5577B5, 0, 0.385, 0, { parent: g, rx: Math.PI / 2, outline: 'thin' });
+  const lab = new THREE.Mesh(new THREE.CylinderGeometry(0.213, 0.213, 0.14, 12, 1, true, Math.PI / 2 - 0.65, 1.3),
+    new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: labelTexture }));
+  lab.position.y = 0.19;
+  g.add(lab);
+}
+
+function buildPantry() {
+  const x = -5.0, z0 = -0.8, z1 = 4.4, zc = (z0 + z1) / 2, len = z1 - z0;
+  P(rbox(1.0, 0.9, len, 0.05), 0xC27A43, x, 0.45, zc);
+  P(rbox(1.14, 0.12, len + 0.12, 0.05), 0xEBC690, x + 0.04, 0.94, zc);
+  for (let i = 0; i < 4; i++) for (const y of [0.64, 0.26]) {
+    const dz = z0 + (len * (i + 0.5)) / 4;
+    P(rbox(0.06, 0.3, len / 4 - 0.16, 0.03), 0xD89357, -4.48, y, dz, { outline: 'thin' });
+    P(new THREE.SphereGeometry(0.045, 10, 8), 0xF6D38A, -4.44, y, dz, { outline: 'thin' });
+  }
+  colBox(x + 0.04, 0.5, zc, 0.57, 0.5, len / 2 + 0.06);
+  P(rbox(0.55, 0.08, 4.5, 0.03), 0xC98B55, -5.22, 2.2, 1.75);
+  for (const bz of [-0.25, 1.75, 3.75]) P(rbox(0.4, 0.3, 0.06, 0.02), 0xA86B3F, -5.3, 2.02, bz, { outline: 'thin' });
+  colBox(-5.22, 2.2, 1.75, 0.28, 0.04, 2.25);
+}
+
+function buildTable() {
+  const x = -2.0, z = 1.6;
+  P(rbox(2.6, 0.12, 2.5, 0.05), 0xE8C28E, x, 0.94, z);
+  P(rbox(2.36, 0.16, 2.26, 0.04), 0xC98B55, x, 0.8, z, { outline: 'thin' });
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) P(rbox(0.16, 0.86, 0.16, 0.04), 0xB5773F, x + sx * 1.1, 0.43, z + sz * 1.05);
+  P(rbox(2.3, 0.07, 2.2, 0.03), 0xD9A36B, x, 0.24, z, { outline: 'thin' });
+  // a basket of wheat on the lower shelf
+  P(new THREE.CylinderGeometry(0.34, 0.28, 0.26, 20), 0xC98B4E, x + 0.55, 0.41, z + 0.4);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    const w = P(new THREE.CapsuleGeometry(0.035, 0.18, 3, 8), 0xF2C66D, x + 0.55 + Math.cos(a) * 0.12, 0.62, z + 0.4 + Math.sin(a) * 0.12, { outline: 'thin' });
+    w.rotation.set(Math.sin(a) * 0.3, 0, -Math.cos(a) * 0.3);
+  }
+  colBox(x, 0.5, z, 1.3, 0.5, 1.25);
+}
+
+function buildBowl() {
+  const { x, y, z } = BOWL.pos;
+  BOWL.mesh = P(lathe([[0, 0], [0.5, 0], [0.62, 0.03], [0.78, 0.16], [0.88, 0.36], [0.92, 0.48], [0.9, 0.52], [0.84, 0.5],
+    [0.8, 0.42], [0.7, 0.22], [0.5, 0.08], [0, 0.07]], 44), 0xFFF8EC, x, y, z);
+  P(new THREE.TorusGeometry(0.855, 0.03, 8, 48), 0x6E9BD6, x, y + 0.3, z, { rx: Math.PI / 2, outline: 'thin' });
+  BOWL.mesh.userData.action = 'mix';
+  addPickable(BOWL.mesh);
+  const parts = [[new CANNON.Cylinder(0.62, 0.62, 0.1, 16), [0, 0.04, 0]]];
+  const n = 16;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    // walls reach a bit above the rim (invisible) so a stacked pile can't topple out
+    parts.push([new CANNON.Box(new CANNON.Vec3(0.06, 0.44, 0.2)), [Math.cos(a) * 0.87, 0.45, Math.sin(a) * 0.87],
+      new CANNON.Quaternion().setFromEuler(0, -a, 0)]);
+  }
+  colCompound(x, y, z, parts);
+  BOWL.whisk = new THREE.Group();
+  P(new THREE.CylinderGeometry(0.045, 0.05, 0.5, 10), 0xC98B55, 0, 0.62, 0, { parent: BOWL.whisk });
+  for (let i = 0; i < 3; i++) {
+    const t = P(new THREE.TorusGeometry(0.12, 0.012, 6, 20), 0xDCE1E6, 0, 0.22, 0, { parent: BOWL.whisk, outline: 'thin' });
+    t.rotation.y = (i * Math.PI) / 3; t.scale.set(1, 1.7, 1);
+  }
+  BOWL.whisk.position.set(x, y + 0.15, z);
+  BOWL.whisk.visible = false;
+  scene.add(BOWL.whisk);
+}
+
+function buildCounter() {
+  const x0 = -1.1, x1 = 5.5, cx = (x0 + x1) / 2, L = x1 - x0, z = -2.5, H = COUNTER_H;
+  P(rbox(L, H - 0.1, 0.9, 0.05), 0xB36E3C, cx, (H - 0.1) / 2, z);
+  P(rbox(L + 0.14, 0.12, 1.06, 0.05), 0xF2D29E, cx, H - 0.06, z);
+  for (let i = 0; i < 5; i++) P(rbox(L / 5 - 0.2, H - 0.4, 0.06, 0.03), 0xCB8650, x0 + (L * (i + 0.5)) / 5, (H - 0.1) / 2, z + 0.46, { outline: 'thin' });
+  colBox(cx, H / 2, z, L / 2 + 0.07, H / 2, 0.53);
+  const rx = 4.85, ry = H + 0.21;
+  P(rbox(0.72, 0.42, 0.6, 0.08), 0xE88D7D, rx, ry, z - 0.05);
+  P(rbox(0.56, 0.2, 0.1, 0.04), 0xFFF3DC, rx, ry + 0.31, z - 0.3, { rx: -0.3 });
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) P(rbox(0.1, 0.05, 0.1, 0.02), 0xFFF3DC, rx - 0.15 + i * 0.15, ry + 0.22, z + 0.03 + j * 0.14, { outline: 'thin' });
+  colBox(rx, ry, z - 0.05, 0.36, 0.21, 0.3);
+}
+
+function buildDisplay() {
+  const x = 3.3, L = 3.2;
+  for (const [h, z] of [[0.5, 1.55], [0.95, 0.8], [1.4, 0.05]]) {
+    P(rbox(L, h - 0.08, 0.75, 0.04), 0x9E5E34, x, (h - 0.08) / 2, z);
+    P(rbox(L + 0.1, 0.1, 0.82, 0.04), 0xE7B77C, x, h - 0.05, z);
+    colBox(x, h / 2, z, L / 2 + 0.05, h / 2, 0.41);
+  }
+  for (const dx of [-0.8, 0.8]) {
+    P(rbox(1.3, 0.26, 0.06, 0.03), 0xB8733F, x + dx, 0.22, 1.93, { outline: 'thin' });
+    P(new THREE.SphereGeometry(0.04, 10, 8), 0xF6D38A, x + dx, 0.22, 1.97, { outline: 'thin' });
+  }
+  // a basket of baguettes and a little chalk sign on the top shelf
+  const bx = 4.5;
+  P(new THREE.CylinderGeometry(0.3, 0.24, 0.3, 20), 0xC98B4E, bx, 1.55, 0.05);
+  P(new THREE.TorusGeometry(0.3, 0.035, 8, 24), 0xB5773F, bx, 1.7, 0.05, { rx: Math.PI / 2, outline: 'thin' });
+  for (const [dx, dz, tz, tx] of [[-0.08, -0.05, 0.25, 0.1], [0.08, 0.04, -0.2, -0.1], [0, 0.1, 0.05, 0.25]]) {
+    const b = MODELS.baguette().g;
+    applyBake(b, 1.1);
+    b.scale.setScalar(1.05);
+    b.position.set(bx + dx, 1.85, 0.05 + dz);
+    b.rotation.set(tx, 0, Math.PI / 2 + tz);
+    scene.add(b);
+  }
+  colBox(bx, 1.6, 0.05, 0.3, 0.2, 0.3);
+  const chalk = ctex(256, 160, (g, w, h) => {
+    g.fillStyle = '#34443A'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#F4EEDC'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '700 64px Fredoka, sans-serif'; g.fillText('Fresh!', w / 2, h / 2 - 12);
+    g.font = '500 28px Fredoka, sans-serif'; g.fillText('baked today', w / 2, h / 2 + 42);
+  });
+  const sg = new THREE.Group();
+  sg.position.set(2.05, 1.4, 0.1); sg.rotation.set(-0.25, 0.25, 0);
+  scene.add(sg);
+  P(rbox(0.62, 0.44, 0.05, 0.02), 0x8A5A3B, 0, 0.26, 0, { parent: sg });
+  const chalkFace = new THREE.Mesh(new THREE.PlaneGeometry(0.54, 0.36), new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: chalk }));
+  chalkFace.position.set(0, 0.26, 0.03);
+  sg.add(chalkFace);
+
+  // striped awning (upgrade)
+  const aw = new THREE.Group();
+  scene.add(aw);
+  for (const sx of [-1, 1]) P(rbox(0.1, 1.75, 0.1, 0.03), 0xFFF4DC, x + sx * 1.5, 2.25, -0.25, { parent: aw });
+  const roof = P(rbox(3.4, 0.07, 1.0, 0.03), texMat(TEX.stripes, 3, 1), x, 3.12, -0.02, { parent: aw });
+  roof.rotation.x = 0.32;
+  const sc = new THREE.ExtrudeGeometry(new THREE.Shape().absarc(0, 0, 0.2, Math.PI, Math.PI * 2, false), { depth: 0.04, bevelEnabled: false });
+  for (let i = 0; i < 8; i++) {
+    const s = P(sc, i % 2 ? 0xFFF4DC : 0xF6C85E, x - 1.49 + i * 0.425, 2.97, 0.47, { parent: aw, outline: 'thin' });
+    s.rotation.x = 0.32;
+  }
+  DECOR.awning = aw;
+}
+
+function buildTrash() {
+  const { x, z } = TRASH.pos;
+  TRASH.mesh = P(lathe([[0, 0], [0.33, 0], [0.36, 0.05], [0.42, 0.78], [0.45, 0.82], [0.45, 0.86], [0.39, 0.86], [0.36, 0.8],
+    [0.3, 0.08], [0, 0.08]], 32), 0x8FB07E, x, 0, z);
+  P(new THREE.TorusGeometry(0.405, 0.03, 8, 32), 0x6F8F60, x, 0.45, z, { rx: Math.PI / 2, outline: 'thin' });
+  const parts = [[new CANNON.Cylinder(0.33, 0.33, 0.08, 12), [0, 0.04, 0]]];
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    parts.push([new CANNON.Box(new CANNON.Vec3(0.04, 0.43, 0.13)), [Math.cos(a) * 0.43, 0.43, Math.sin(a) * 0.43],
+      new CANNON.Quaternion().setFromEuler(0, -a, 0)]);
+  }
+  colCompound(x, 0, z, parts);
+}
+
+function plant(x, y, z, s = 1, parent = scene) {
+  const g = new THREE.Group();
+  g.position.set(x, y, z); g.scale.setScalar(s);
+  parent.add(g);
+  P(lathe([[0, 0], [0.2, 0], [0.26, 0.36], [0.3, 0.38], [0.3, 0.44], [0.25, 0.44], [0.22, 0.4], [0, 0.4]], 20), 0xD9774A, 0, 0, 0, { parent: g });
+  if (!GEO.plantLeaf) GEO.plantLeaf = new THREE.SphereGeometry(0.16, 12, 8).scale(0.55, 1.45, 0.3);
+  for (let i = 0; i < 8; i++) {
+    const pv = new THREE.Group();
+    pv.position.y = 0.38; pv.rotation.y = -(i / 8) * Math.PI * 2 + i;
+    g.add(pv);
+    const tilt = 0.35 + (i % 3) * 0.25;
+    const l = P(GEO.plantLeaf, i % 2 ? 0x7CB85A : 0x66A348, Math.sin(tilt) * 0.2, Math.cos(tilt) * 0.2, 0, { parent: pv });
+    l.rotation.z = -tilt;
+  }
+  return g;
+}
+
+function bunting(x0, x1, y, z) {
+  const g = new THREE.Group();
+  scene.add(g);
+  const tri = new THREE.Shape();
+  tri.moveTo(-0.14, 0); tri.lineTo(0.14, 0); tri.lineTo(0, -0.27); tri.closePath();
+  const tg = new THREE.ExtrudeGeometry(tri, { depth: 0.02, bevelEnabled: false });
+  const cols = [0xF4A646, 0xFFF1D6, 0xE98B7B, 0x9BCB7A];
+  const n = Math.round((x1 - x0) / 0.42);
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    P(tg, cols[i % 4], lerp(x0, x1, t), y - Math.sin(t * Math.PI) * 0.25, z, { parent: g, outline: 'thin', cast: false });
+  }
+  const pts = [];
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    pts.push(new THREE.Vector3(lerp(x0 - 0.1, x1 + 0.1, t), y - Math.sin(t * Math.PI) * 0.25 + 0.01, z + 0.01));
+  }
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 40, 0.012, 5), MAT.eye));
+  return g;
+}
+
+function buildDecor() {
+  // flour sacks piled in the corner
+  const pile = new THREE.Group(); pile.position.set(-3.55, 0, 4.25); scene.add(pile);
+  for (const [dx, dz, r] of [[-0.3, 0, 0.3], [0.32, 0.08, -0.4]]) {
+    const s = MODELS.flour().g; s.scale.setScalar(1.9); s.position.set(dx, 0.46, dz); s.rotation.y = r; pile.add(s);
+  }
+  const top = MODELS.flour().g; top.scale.setScalar(1.7); top.position.set(0, 1.25, 0.05); top.rotation.set(0.1, 0.2, Math.PI / 2 - 0.1); pile.add(top);
+  colBox(-3.55, 0.7, 4.25, 0.72, 0.7, 0.42);
+
+  plant(5.35, 0, -3.95, 1.25);
+
+  // rug (the cat sleeps here)
+  const rugTop = new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.rug });
+  P(new THREE.CylinderGeometry(1.15, 1.15, 0.03, 48), [toon(0xE0954B), rugTop, toon(0xE0954B)], 2.75, 0.016, 3.45, { outline: 'thin', cast: false });
+
+  // cozy upgrade decorations
+  DECOR.cozy = new THREE.Group(); scene.add(DECOR.cozy);
+  DECOR.cozy.add(bunting(-2.8, 3.6, 4.02, -4.46));
+  plant(5.3, 0, 2.55, 1.5, DECOR.cozy);
+  plant(-0.72, COUNTER_H, -2.55, 0.7, DECOR.cozy);
+  plant(-5.2, 2.24, 4.0, 0.62, DECOR.cozy);
+  const lb = bunting(-4.8, 4.6, 4.0, 0);
+  lb.rotation.y = Math.PI / 2; lb.position.set(-5.46, 0, 0.1);
+  DECOR.cozy.add(lb);
+}
+
+function buildCat() {
+  const g = new THREE.Group();
+  g.position.set(2.75, 0.03, 3.45); g.rotation.y = -0.6;
+  scene.add(g);
+  P(rbox(0.95, 0.16, 0.8, 0.07), 0xE97F7F, 0, 0.08, 0, { parent: g });
+  const fur = 0xF2A65A, dark = 0xD9823B;
+  CAT.body = P(new THREE.SphereGeometry(0.3, 22, 16), fur, 0, 0.34, 0, { parent: g });
+  CAT.body.scale.set(1.3, 0.72, 1.02);
+  for (const dx of [-0.14, 0, 0.14]) {
+    const st = P(new THREE.SphereGeometry(0.1, 10, 8), dark, dx, 0.52, -0.02, { parent: g, outline: false });
+    st.scale.set(0.35, 0.3, 1.6);
+  }
+  CAT.head = new THREE.Group(); CAT.head.position.set(0.33, 0.42, 0.14); g.add(CAT.head);
+  P(new THREE.SphereGeometry(0.21, 22, 16), fur, 0, 0, 0, { parent: CAT.head });
+  for (const s of [-1, 1]) {
+    const e = P(new THREE.ConeGeometry(0.075, 0.14, 4), fur, s * 0.12, 0.17, 0, { parent: CAT.head });
+    e.rotation.z = -s * 0.35;
+  }
+  CAT.face = new THREE.Group(); CAT.face.position.set(0.06, -0.02, 0.19); CAT.face.rotation.y = 0.35; CAT.head.add(CAT.face);
+  CAT.sleepEyes = new THREE.Group(); CAT.openEyes = new THREE.Group();
+  for (const s of [-1, 1]) {
+    const e = new THREE.Mesh(GEO.smile, MAT.eye); e.scale.setScalar(1.3); e.position.set(s * 0.075, 0.02, 0.01); CAT.sleepEyes.add(e);
+    const o = new THREE.Mesh(GEO.eye, MAT.eye); o.scale.setScalar(1.2); o.position.set(s * 0.075, 0.02, 0.01); CAT.openEyes.add(o);
+    const b = new THREE.Mesh(GEO.blush, MAT.blush); b.position.set(s * 0.12, -0.035, 0.012); CAT.face.add(b);
+  }
+  CAT.face.add(CAT.sleepEyes, CAT.openEyes);
+  CAT.openEyes.visible = false;
+  const tail = P(new THREE.TorusGeometry(0.34, 0.055, 8, 24, Math.PI * 1.1), fur, 0, 0.16, 0, { parent: g });
+  tail.rotation.set(Math.PI / 2, 0, 1.7);
+  CAT.g = g;
+  g.userData.action = 'cat';
+  addPickable(g);
+}
+
+/* =====================================================================
+   World-anchored HTML labels, toasts, floating text
+   ===================================================================== */
+const labelsEl = $('labels');
+const anchors = new Set();
+const _proj = new THREE.Vector3();
+function toScreen(v) {
+  _proj.copy(v).project(camera);
+  return { x: (_proj.x * 0.5 + 0.5) * view.W, y: (-_proj.y * 0.5 + 0.5) * view.H };
+}
+class Anchor {
+  constructor(cls) {
+    this.el = document.createElement('div');
+    this.el.className = 'anchor';
+    this.inner = document.createElement('div');
+    this.inner.className = cls;
+    this.cls = cls;
+    this.el.appendChild(this.inner);
+    labelsEl.appendChild(this.el);
+    this.pos = new THREE.Vector3();
+    this.visible = true;
+    this.html = null;
+    anchors.add(this);
+  }
+  set(html) { if (html !== this.html) { this.html = html; this.inner.innerHTML = html; } return this; }
+  setClass(cls) { if (cls !== this.cls) { this.cls = cls; this.inner.className = cls; } return this; }
+  show(v) { if (v !== this.visible) { this.visible = v; this.el.style.display = v ? '' : 'none'; } return this; }
+  update() {
+    if (!this.visible) return;
+    const s = toScreen(this.pos);
+    this.el.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px)`;
+  }
+  destroy() { this.el.remove(); anchors.delete(this); }
+}
+function floatText(text, pos, cls = '') {
+  const a = new Anchor(`float ${cls}`);
+  a.set(text); a.pos.copy(pos); a.update();
+  setTimeout(() => a.destroy(), 1450);
+}
+function toast(html) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = html;
+  $('toasts').appendChild(t);
+  setTimeout(() => t.remove(), 3100);
+}
+
+/* =====================================================================
+   Particles + tweens
+   ===================================================================== */
+const particles = [];
+function particle(tex, pos, { vel = null, life = 1, size = 0.3, grow = 1.5, gravity = 0, color = 0xFFFFFF, opacity = 1 } = {}) {
+  const m = new THREE.SpriteMaterial({ map: tex, color, transparent: true, depthWrite: false, opacity });
+  const s = new THREE.Sprite(m);
+  s.position.copy(pos); s.scale.setScalar(size); s.renderOrder = 10;
+  scene.add(s);
+  particles.push({ s, vel: vel || new THREE.Vector3(), life, t: 0, size, grow, gravity, o: opacity });
+}
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.t += dt;
+    const k = p.t / p.life;
+    if (k >= 1) { scene.remove(p.s); p.s.material.dispose(); particles.splice(i, 1); continue; }
+    p.vel.y -= p.gravity * dt;
+    p.s.position.addScaledVector(p.vel, dt);
+    p.s.scale.setScalar(p.size * lerp(1, p.grow, k));
+    p.s.material.opacity = p.o * (1 - k * k);
+  }
+}
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+function puffs(pos, n = 6, color = 0xFFFFFF, spread = 0.5) {
+  for (let i = 0; i < n; i++) {
+    particle(TEX.puff, V(pos.x + rand(-0.15, 0.15), pos.y + rand(0, 0.2), pos.z + rand(-0.15, 0.15)), {
+      vel: V(rand(-1, 1) * spread, rand(0.6, 1.6) * spread, rand(-1, 1) * spread), life: rand(0.5, 0.9), size: rand(0.22, 0.38), grow: 1.9, color, opacity: 0.9,
+    });
+  }
+}
+function sparkles(pos, n = 5) {
+  for (let i = 0; i < n; i++) {
+    particle(TEX.star, V(pos.x, pos.y, pos.z), { vel: V(rand(-1.4, 1.4), rand(1.5, 3), rand(-1.4, 1.4)), life: rand(0.6, 0.9), size: rand(0.16, 0.26), grow: 0.4, gravity: 5 });
+  }
+}
+function hearts(pos, n = 3) {
+  for (let i = 0; i < n; i++) {
+    particle(TEX.heart, V(pos.x + rand(-0.25, 0.25), pos.y + rand(0, 0.2), pos.z + rand(-0.25, 0.25)), { vel: V(rand(-0.3, 0.3), rand(0.8, 1.3), rand(-0.3, 0.3)), life: rand(1, 1.4), size: rand(0.2, 0.28), grow: 1.2 });
+  }
+}
+function smoke(pos) {
+  particle(TEX.puff, V(pos.x + rand(-0.1, 0.1), pos.y + 0.2, pos.z + rand(-0.1, 0.1)), { vel: V(rand(-0.15, 0.15), rand(0.5, 0.8), rand(-0.15, 0.15)), life: rand(1.2, 1.8), size: 0.3, grow: 2.6, color: 0x8C8078, opacity: 0.7 });
+}
+
+const tweens = [];
+function tween(dur, fn, done) { tweens.push({ t: 0, dur, fn, done }); }
+function updateTweens(dt) {
+  for (let i = tweens.length - 1; i >= 0; i--) {
+    const tw = tweens[i];
+    tw.t += dt;
+    const k = Math.min(1, tw.t / tw.dur);
+    tw.fn(k);
+    if (k >= 1) { tweens.splice(i, 1); if (tw.done) tw.done(); }
+  }
+}
+
+/* =====================================================================
+   Items (anything you can pick up)
+   ===================================================================== */
+let T = 0;                 // game clock in seconds
+let started = false;
+const MAX_ITEMS = 55;
+const items = new Set();
+const pickables = [];
+function addPickable(o) { pickables.push(o); }
+function removePickable(o) { const i = pickables.indexOf(o); if (i >= 0) pickables.splice(i, 1); }
+
+function shapeRadius(sh) {
+  if (sh.t === 'box') return Math.max(...sh.h);
+  if (sh.t === 'sphere') return sh.r;
+  if (sh.t === 'cyl') return Math.max(sh.r, sh.h / 2);
+  return sh.rad;
+}
+function makeBody(sh, s, coin) {
+  const b = new CANNON.Body({
+    mass: coin ? 0.3 : 1, material: PM.item,
+    collisionFilterGroup: coin ? GRP.COIN : GRP.ITEM, collisionFilterMask: coin ? MASK.COIN : MASK.ITEM,
+    linearDamping: 0.06, angularDamping: 0.3, allowSleep: true, sleepSpeedLimit: 0.12, sleepTimeLimit: 0.5,
+  });
+  if (sh.t === 'box') b.addShape(new CANNON.Box(new CANNON.Vec3(sh.h[0] * s, sh.h[1] * s, sh.h[2] * s)));
+  else if (sh.t === 'sphere') b.addShape(new CANNON.Sphere(sh.r * s));
+  else if (sh.t === 'cyl') b.addShape(new CANNON.Cylinder(sh.r * s, sh.r * s, sh.h * s, 12));
+  else for (const p of sh.parts) b.addShape(new CANNON.Sphere(p.r * s), new CANNON.Vec3(p.o[0] * s, p.o[1] * s, p.o[2] * s));
+  return b;
+}
+
+class Item {
+  constructor(kind, x, y, z, progress = 0) {
+    this.kind = kind;
+    this.info = ITEMS[kind];
+    const m = MODELS[kind]();
+    this.mesh = m.g;
+    this.mesh.scale.setScalar(ITEM_S);
+    this.mesh.userData.item = this;
+    this.rest = m.rest * ITEM_S;
+    this.radius = shapeRadius(m.shape) * ITEM_S;
+    this.progress = kind === 'cake' ? 1.2 : progress;
+    this.body = makeBody(m.shape, ITEM_S, kind === 'coin');
+    this.body.userData = { item: this };
+    this.body.addEventListener('collide', (e) => onItemCollide(this, e));
+    this.inWorld = false;
+    this.location = 'world';   // world | held | oven | anim
+    this.slot = null;
+    this.born = T;
+    scene.add(this.mesh);
+    items.add(this);
+    addPickable(this.mesh);
+    this.place(x, y, z);
+    this.addBody();
+    this.applyBake();
+    this.sync();
+  }
+  place(x, y, z, q) {
+    const b = this.body;
+    b.position.set(x, y, z);
+    b.previousPosition.copy(b.position);
+    b.interpolatedPosition.copy(b.position);
+    if (q) {
+      b.quaternion.set(q.x, q.y, q.z, q.w);
+      b.previousQuaternion.copy(b.quaternion);
+      b.interpolatedQuaternion.copy(b.quaternion);
+    }
+    b.velocity.setZero();
+    b.angularVelocity.setZero();
+    b.aabbNeedsUpdate = true;
+  }
+  addBody() {
+    if (this.inWorld) return;
+    world.addBody(this.body);
+    this.inWorld = true;
+    this.body.wakeUp();
+  }
+  removeBody() {
+    if (!this.inWorld) return;
+    world.removeBody(this.body);
+    this.inWorld = false;
+  }
+  sync() {
+    this.mesh.position.copy(this.body.interpolatedPosition);
+    this.mesh.quaternion.copy(this.body.interpolatedQuaternion);
+  }
+  get state() {
+    if (this.kind === 'cake') return 'baked';
+    if (!this.info.bake) return 'plain';
+    if (this.progress < 1) return 'raw';
+    return this.progress < BURN_AT ? 'baked' : 'burnt';
+  }
+  get label() {
+    const n = this.info.name, s = this.state;
+    if (s === 'raw') return `${n} dough`;
+    if (s === 'burnt') return `Burnt ${n.toLowerCase()}`;
+    return n;
+  }
+  applyBake() { if (this.info.type === 'good') applyBake(this.mesh, this.progress); }
+}
+
+function destroyItem(it, fx = false) {
+  if (!items.has(it)) return;
+  if (hold.item === it) endHold();
+  if (it.slot) { it.slot.item = null; it.slot = null; }
+  it.removeBody();
+  scene.remove(it.mesh);
+  removePickable(it.mesh);
+  items.delete(it);
+  it.mesh.traverse((o) => forMats(o, (m) => { if (m.userData.bake) m.dispose(); }));
+  if (fx) puffs(it.mesh.position, 7, 0xFFFFFF, 0.6);
+  wakeNear(it.mesh.position, 1.8);
+}
+function wakeNear(p, r) {
+  for (const o of items) {
+    if (!o.inWorld || o.body.sleepState !== CANNON.Body.SLEEPING) continue;
+    const b = o.body.position;
+    if ((b.x - p.x) ** 2 + (b.y - p.y) ** 2 + (b.z - p.z) ** 2 < r * r) o.body.wakeUp();
+  }
+}
+function cleanupItems() {
+  let n = 0;
+  for (const it of items) if (it.kind !== 'coin') n++;
+  if (n < MAX_ITEMS) return;
+  let oldest = null;
+  for (const it of items) {
+    if (it.location !== 'world' || it.info.type !== 'ingredient') continue;
+    if (!oldest || it.born < oldest.born) oldest = it;
+  }
+  if (oldest) destroyItem(oldest, true);
+}
+
+const hitQueue = [];
+function onItemCollide(it, e) {
+  const v = Math.abs(e.contact.getImpactVelocityAlongNormal());
+  if (v > 1.5 && it.location === 'world') Sound.thud(v);
+  const o = e.body && e.body.userData;
+  if (!o) return;
+  if (o.customer) { if (it.location === 'world') hitQueue.push({ cust: o.customer, item: it, v }); }
+  else if (o.item && it.kind === 'strawberry' && o.item.kind === 'sponge') hitQueue.push({ berry: it, cake: o.item });
+}
+function processHits() {
+  while (hitQueue.length) {
+    const h = hitQueue.shift();
+    if (h.berry) {
+      if (!items.has(h.berry) || !items.has(h.cake) || h.cake.location === 'oven') continue;
+      if (h.cake.state === 'baked') combineCake(h.cake, h.berry);
+      else if (T - (h.cake.nagT || -9) > 2) { h.cake.nagT = T; toast(h.cake.state === 'raw' ? 'Bake the sponge first, then add the strawberry!' : 'That sponge is burnt…'); }
+    } else if (items.has(h.item)) h.cust.onHit(h.item, h.v);
+  }
+}
+function combineCake(cake, berry) {
+  const p = cake.body.position;
+  const pos = V(p.x, p.y + 0.15, p.z);
+  destroyItem(berry);
+  destroyItem(cake);
+  const c = new Item('cake', pos.x, pos.y, pos.z);
+  c.body.velocity.set(0, 2.5, 0);
+  sparkles(pos, 8);
+  Sound.yay();
+  floatText('Strawberry cake!', V(pos.x, pos.y + 0.5, pos.z));
+}
+
+/* =====================================================================
+   Pantry sources
+   ===================================================================== */
+const sources = [];
+function buildSources() {
+  for (const s of SOURCES) {
+    const [x, y, z] = s.pos;
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    scene.add(g);
+    SOURCE_BUILD[s.key](g, x, y, z);
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.95), HIDDEN);
+    hit.position.set(x, y + 0.4, z);
+    hit.userData.source = s.key;
+    scene.add(hit);
+    addPickable(hit);
+    const lock = new Anchor('lock');
+    lock.set('🔒');
+    lock.pos.set(x + 0.3, y + 0.45, z);
+    lock.show(false);
+    sources.push({ key: s.key, g, hit, lock, locked: false, spawn: V(x + 0.15, y + 1.0, z) });
+  }
+}
+function refreshSources() {
+  const known = knownIngredients();
+  for (const s of sources) {
+    s.locked = !known.has(s.key);
+    s.lock.show(s.locked && started);
+  }
+}
+function takeFromSource(src) {
+  if (!src) return;
+  if (src.locked) {
+    const r = RECIPES.find((rr) => rr.needs[src.key] || rr.topping === src.key);
+    toast(`Unlock <b>${ITEMS[r.sells].name}</b> in the Shop to use ${ITEMS[src.key].name.toLowerCase()}.`);
+    Sound.sad();
+    return;
+  }
+  cleanupItems();
+  const it = new Item(src.key, src.spawn.x, src.spawn.y, src.spawn.z);
+  it.place(src.spawn.x, src.spawn.y, src.spawn.z, new CANNON.Quaternion().setFromEuler(0, rand(-0.5, 0.5), 0));
+  Sound.pop();
+  grab(it);
+}
+
+/* =====================================================================
+   Mixing bowl
+   ===================================================================== */
+function bowlItems() {
+  const out = [];
+  for (const it of items) {
+    if (it.location !== 'world' || it.info.type !== 'ingredient') continue;
+    const p = it.body.position, dx = p.x - BOWL.pos.x, dz = p.z - BOWL.pos.z;
+    if (dx * dx + dz * dz < 0.8 * 0.8 && p.y > BOWL.pos.y && p.y < BOWL.pos.y + 1.3) out.push(it);
+  }
+  return out;
+}
+function countKinds(list) {
+  const c = {};
+  for (const it of list) c[it.kind] = (c[it.kind] || 0) + 1;
+  return c;
+}
+const sameCounts = (a, b) => {
+  const ka = Object.keys(a), kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => a[k] === b[k]);
+};
+const subsetOf = (c, needs) => Object.keys(c).every((k) => (needs[k] || 0) >= c[k]);
+
+function updateBowl(dt) {
+  if (BOWL.mixing > 0) {
+    BOWL.mixing -= dt;
+    BOWL.whisk.rotation.y += dt * 16;
+    BOWL.whisk.position.set(BOWL.pos.x + Math.cos(T * 9) * 0.2, BOWL.pos.y + 0.15, BOWL.pos.z + Math.sin(T * 9) * 0.2);
+    BOWL.mesh.rotation.z = Math.sin(T * 30) * 0.035;
+    if (Math.random() < dt * 14) puffs(V(BOWL.pos.x + rand(-0.4, 0.4), BOWL.pos.y + 0.45, BOWL.pos.z + rand(-0.4, 0.4)), 1, 0xFFFDF5, 0.35);
+    if (BOWL.mixing <= 0) finishMix();
+    return;
+  }
+  BOWL.contents = bowlItems();
+  const c = countKinds(BOWL.contents);
+  const known = RECIPES.filter(recipeKnown);
+  const any = BOWL.contents.length > 0;
+  BOWL.match = any ? known.find((r) => sameCounts(r.needs, c)) || null : null;
+  BOWL.partial = any && !BOWL.match && known.some((r) => subsetOf(c, r.needs));
+  BOWL.lockedMatch = any && !BOWL.match ? RECIPES.find((r) => !recipeKnown(r) && sameCounts(r.needs, c)) || null : null;
+  const sig = JSON.stringify(c) + (BOWL.match ? BOWL.match.id : '') + (BOWL.partial ? 'p' : '') + (BOWL.lockedMatch ? 'L' : '');
+  if (sig !== BOWL.sig) {
+    BOWL.sig = sig;
+    let html = Object.entries(c).map(([k, n]) =>
+      `<span class="ing"><img src="${ICON[k]}" alt="${ITEMS[k].name}">${n > 1 ? `<b>×${n}</b>` : ''}</span>`).join('');
+    if (BOWL.match) html += `<span class="arrow">→</span><span class="res"><img src="${ICON[BOWL.match.makes]}" alt=""></span><button class="mini pulse" data-act="mix">Mix!</button>`;
+    else if (BOWL.partial) html += '<span class="arrow">…</span>';
+    else if (BOWL.lockedMatch) html += '<span class="arrow">🔒</span><button class="mini alt" data-act="tip">Tip out</button>';
+    else html += '<span class="arrow">✗</span><button class="mini alt" data-act="tip">Tip out</button>';
+    BOWL.anchor.set(html);
+    if (BOWL.lockedMatch && !BOWL.lockedToasted) {
+      BOWL.lockedToasted = true;
+      toast(`That's the recipe for <b>${ITEMS[BOWL.lockedMatch.sells].name}</b>! Unlock it in the Shop.`);
+    }
+  }
+  BOWL.anchor.show(any);
+}
+// Where the next ingredient should land: the spot furthest from what's already in the bowl
+const BOWL_SPOTS = [[0, 0], [0.38, 0], [-0.38, 0], [0, 0.38], [0, -0.38], [0.27, 0.27], [-0.27, 0.27], [0.27, -0.27], [-0.27, -0.27]];
+function bowlSpot() {
+  let best = BOWL_SPOTS[0], bestD = -1;
+  for (const sp of BOWL_SPOTS) {
+    let d = 9;
+    for (const o of BOWL.contents) {
+      const dx = o.body.position.x - (BOWL.pos.x + sp[0]), dz = o.body.position.z - (BOWL.pos.z + sp[1]);
+      d = Math.min(d, dx * dx + dz * dz);
+    }
+    if (d > bestD + 1e-6) { bestD = d; best = sp; }
+  }
+  return best;
+}
+function startMix() {
+  if (BOWL.mixing > 0 || !BOWL.match) return;
+  BOWL.mixRecipe = BOWL.match;
+  BOWL.mixing = 1.2;
+  for (const it of BOWL.contents) {
+    it.removeBody();
+    it.location = 'anim';
+    const from = it.mesh.position.clone(), to = V(BOWL.pos.x, BOWL.pos.y + 0.25, BOWL.pos.z);
+    tween(0.35, (k) => { it.mesh.position.lerpVectors(from, to, smooth(k)); it.mesh.scale.setScalar(ITEM_S * (1 - 0.7 * k)); }, () => destroyItem(it));
+  }
+  BOWL.contents = [];
+  BOWL.match = null;
+  BOWL.sig = '';
+  BOWL.anchor.show(false);
+  BOWL.whisk.visible = true;
+  Sound.whisk();
+}
+function finishMix() {
+  BOWL.whisk.visible = false;
+  BOWL.mesh.rotation.z = 0;
+  const rec = BOWL.mixRecipe;
+  const it = new Item(rec.makes, BOWL.pos.x, BOWL.pos.y + 0.45, BOWL.pos.z);
+  it.body.velocity.set(1.3, 5.2, 1.1);
+  it.body.angularVelocity.set(rand(-3, 3), rand(-3, 3), rand(-3, 3));
+  puffs(V(BOWL.pos.x, BOWL.pos.y + 0.5, BOWL.pos.z), 8, 0xFFFDF5, 0.7);
+  sparkles(V(BOWL.pos.x, BOWL.pos.y + 0.7, BOWL.pos.z), 4);
+  Sound.pop();
+}
+function tipBowl() {
+  for (const it of BOWL.contents) {
+    const d = V(it.body.position.x - BOWL.pos.x, 0, it.body.position.z - BOWL.pos.z);
+    if (d.lengthSq() < 1e-4) d.set(1, 0, 1);
+    d.normalize().add(V(0.8, 0, 0.8)).normalize();
+    it.body.wakeUp();
+    it.body.velocity.set(d.x * 2.6 + rand(-0.4, 0.4), 6, d.z * 2.6 + rand(-0.4, 0.4));
+    it.body.angularVelocity.set(rand(-6, 6), rand(-6, 6), rand(-6, 6));
+  }
+  BOWL.lockedToasted = false;
+  tween(0.4, (k) => { BOWL.mesh.rotation.x = Math.sin(k * Math.PI) * 0.25; }, () => { BOWL.mesh.rotation.x = 0; });
+  Sound.whoosh();
+}
+
+/* =====================================================================
+   Oven
+   ===================================================================== */
+const ovenAccepts = (it) => it.info.type === 'good' && !!it.info.bake && it.state !== 'burnt';
+function ovenInsert(it) {
+  const slot = OVEN.slots.find((s) => !s.item);
+  if (!slot) { toast('The oven is full!'); Sound.sad(); return false; }
+  slot.item = it;
+  it.slot = slot;
+  it.removeBody();
+  it.location = 'anim';
+  const from = it.mesh.position.clone(), q0 = it.mesh.quaternion.clone();
+  const to = slot.pos.clone(); to.y += it.rest;
+  const q1 = new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), Math.PI / 2);
+  tween(0.35, (k) => {
+    const e = smooth(k);
+    it.mesh.position.lerpVectors(from, to, e);
+    it.mesh.position.y += Math.sin(k * Math.PI) * 0.35;
+    it.mesh.quaternion.slerpQuaternions(q0, q1, e);
+  }, () => { if (it.slot === slot) it.location = 'oven'; });
+  Sound.plop();
+  Sound.sizzle();
+  return true;
+}
+function ovenTake(it) {
+  if (it.slot) { it.slot.item = null; it.slot = null; }
+}
+function updateOven(dt) {
+  let baking = 0, warn = false;
+  for (const s of OVEN.slots) {
+    if (!s.ring) { s.ring = new Anchor('ring'); s.ring.pos.copy(s.pos).add(V(0.15, 0.95, 0)); }
+    const it = s.item;
+    if (!it || it.location !== 'oven') { s.ring.show(false); continue; }
+    baking++;
+    const before = it.progress;
+    it.progress += dt / (it.info.bake * bakeMult());
+    const p = it.progress;
+    if (before < 1 && p >= 1) { Sound.ding(); sparkles(V(it.mesh.position.x + 0.3, it.mesh.position.y + 0.3, it.mesh.position.z), 5); }
+    if (before < BURN_AT && p >= BURN_AT) { Sound.sad(); puffs(it.mesh.position, 6, 0x6E625A, 0.4); }
+    if (p >= 1.5 && p < BURN_AT) warn = true;
+    if (p >= BURN_AT && Math.random() < dt * 3) smoke(it.mesh.position);
+    it.applyBake();
+    let cls = 'ring', c = '#F4A646', txt = '', fill = Math.min(1, p);
+    if (p >= BURN_AT) { c = '#4B2E1D'; txt = '✗'; fill = 1; }
+    else if (p >= 1.5) { c = '#E0584C'; txt = '!'; cls = 'ring warn'; fill = 1; }
+    else if (p >= 1) { c = '#74B35A'; txt = '✓'; fill = 1; }
+    s.ring.setClass(cls).set(`<span>${txt}</span>`).show(true);
+    s.ring.inner.style.setProperty('--c', c);
+    s.ring.inner.style.setProperty('--p', fill.toFixed(3));
+  }
+  const target = baking ? 7 + Math.sin(T * 13) * 0.8 + Math.sin(T * 7.3) * 0.6 : 0;
+  OVEN.light.intensity = damp(OVEN.light.intensity, target, 6, dt);
+  OVEN.glowMat.color.setScalar(damp(OVEN.glowMat.color.r, baking ? 1 : 0.45, 4, dt));
+  OVEN.eyeHappy.visible = baking > 0 && !warn;
+  OVEN.eyeOpen.visible = !OVEN.eyeHappy.visible;
+  OVEN.face.position.z = OVEN.zc + (warn ? Math.sin(T * 45) * 0.02 : 0);
+  if (baking && Math.random() < dt * 1.3) {
+    particle(TEX.puff, OVEN.chimney.clone(), { vel: V(rand(-0.1, 0.2), rand(0.6, 0.9), rand(-0.1, 0.2)), life: 2, size: 0.3, grow: 2.8, color: 0xF3EDE4, opacity: 0.8 });
+  }
+}
+
+/* =====================================================================
+   Bin
+   ===================================================================== */
+function trashDrop(it) {
+  it.removeBody();
+  it.location = 'anim';
+  const from = it.mesh.position.clone(), to = V(TRASH.pos.x, 0.55, TRASH.pos.z);
+  tween(0.32, (k) => {
+    it.mesh.position.lerpVectors(from, to, smooth(k));
+    it.mesh.position.y += Math.sin(k * Math.PI) * 0.6;
+    it.mesh.scale.setScalar(ITEM_S * (1 - 0.5 * k));
+  }, () => { destroyItem(it); binFx(); });
+  return true;
+}
+function binFx() {
+  Sound.trash();
+  puffs(V(TRASH.pos.x, 0.8, TRASH.pos.z), 5, 0xEDE4D2, 0.4);
+  tween(0.3, (k) => { TRASH.mesh.scale.set(1 + Math.sin(k * Math.PI) * 0.08, 1 - Math.sin(k * Math.PI) * 0.06, 1 + Math.sin(k * Math.PI) * 0.08); });
+}
+function updateTrash() {
+  for (const it of items) {
+    if (it.location !== 'world') continue;
+    const p = it.body.position;
+    if (p.y < -3) { destroyItem(it); continue; }
+    if (it.kind === 'coin') continue;
+    const dx = p.x - TRASH.pos.x, dz = p.z - TRASH.pos.z;
+    if (dx * dx + dz * dz < 0.37 * 0.37 && p.y < 0.85) { destroyItem(it); binFx(); }
+  }
+}
+
+/* =====================================================================
+   Customers
+   ===================================================================== */
+const SPOTS = [0.35, 1.85, 3.3].map((x, i) => ({ x, z: -3.5, c: null, bubbleUp: i === 1 ? 0.5 : 0 }));  // middle bubble sits higher so they don't overlap
+const LANE_Z = -4.02, OUT_Z = -5.3;
+const customers = [];
+const CUST_TYPES = ['bunny', 'bear', 'cat', 'pup'];
+const CUST_S = 1.35;   // customers are drawn a bit bigger than life so they read well over the counter
+const SHIRTS = [0x7FB4E0, 0xF28C8C, 0x9ACD7B, 0xF7C85C, 0xB79AE0, 0xF4A6C8];
+
+function dampAngle(a, b, k, dt) {
+  let d = (b - a + Math.PI) % (Math.PI * 2);
+  if (d < 0) d += Math.PI * 2;
+  d -= Math.PI;
+  return a + d * (1 - Math.exp(-k * dt));
+}
+// Place a flat face feature on the surface of a sphere of radius R, facing outward
+function stick(obj, R, x, y, lift = 0.004) {
+  const z = Math.sqrt(Math.max(0, R * R - x * x - y * y));
+  const n = V(x, y, z).normalize();
+  obj.position.copy(n).multiplyScalar(R + lift);
+  obj.rotation.set(-Math.asin(n.y), Math.atan2(n.x, n.z), 0, 'YXZ');
+  return obj;
+}
+
+function buildCustomerMesh(type) {
+  const g = new THREE.Group();
+  const fur = { bunny: 0xFFF6EE, bear: 0xC08A5A, cat: pick([0xF2A65A, 0xBDB6AE, 0x7A6F68]), pup: 0xEBCB9F }[type];
+  const inner = { bunny: 0xF6B7C1, bear: 0x9A6A45, cat: 0xF6B7C1, pup: 0xA7744C }[type];
+  P(lathe([[0, 0], [0.26, 0], [0.31, 0.05], [0.33, 0.2], [0.3, 0.42], [0.22, 0.56], [0.12, 0.62], [0, 0.63]], 24), pick(SHIRTS), 0, 0, 0, { parent: g });
+  P(new THREE.TorusGeometry(0.17, 0.05, 8, 20), pick([0xFFF4DC, 0xF4A646, 0xE98B7B, 0x8FC2E8]), 0, 0.6, 0, { parent: g, rx: Math.PI / 2, outline: 'thin' });
+  const arms = [];
+  for (const s of [-1, 1]) {
+    const pv = new THREE.Group();
+    pv.position.set(s * 0.28, 0.5, 0); pv.rotation.z = s * 0.35;
+    g.add(pv);
+    P(new THREE.CapsuleGeometry(0.07, 0.2, 4, 8), fur, 0, -0.15, 0, { parent: pv });
+    arms.push(pv);
+  }
+  for (const s of [-1, 1]) P(new THREE.SphereGeometry(0.1, 12, 8), fur, s * 0.13, 0.04, 0.07, { parent: g }).scale.set(1, 0.6, 1.3);
+
+  const head = new THREE.Group();
+  head.position.y = 0.95;
+  g.add(head);
+  const R = 0.33;
+  P(new THREE.SphereGeometry(R, 26, 20), fur, 0, 0, 0, { parent: head });
+  if (type === 'bunny') {
+    for (const s of [-1, 1]) {
+      const e = new THREE.Group(); e.position.set(s * 0.12, 0.28, -0.02); e.rotation.z = -s * 0.15; head.add(e);
+      P(new THREE.CapsuleGeometry(0.075, 0.3, 4, 10), fur, 0, 0.18, 0, { parent: e });
+      P(new THREE.CapsuleGeometry(0.035, 0.22, 4, 8), inner, 0, 0.19, 0.055, { parent: e, outline: false });
+    }
+  } else if (type === 'bear') {
+    for (const s of [-1, 1]) {
+      P(new THREE.SphereGeometry(0.1, 14, 10), fur, s * 0.23, 0.24, -0.02, { parent: head });
+      P(new THREE.SphereGeometry(0.055, 10, 8), inner, s * 0.235, 0.245, 0.065, { parent: head, outline: false }).scale.set(1, 1, 0.4);
+    }
+  } else if (type === 'cat') {
+    for (const s of [-1, 1]) P(new THREE.ConeGeometry(0.1, 0.19, 4), fur, s * 0.19, 0.29, 0, { parent: head, rz: -s * 0.4 });
+  } else {
+    for (const s of [-1, 1]) P(new THREE.SphereGeometry(0.13, 14, 10), inner, s * 0.31, 0.02, -0.02, { parent: head, rz: s * 0.3 }).scale.set(0.55, 1.25, 0.4);
+  }
+  const eyes = new THREE.Group(), happy = new THREE.Group();
+  for (const s of [-1, 1]) {
+    const e = new THREE.Mesh(GEO.eye, MAT.eye); e.scale.setScalar(1.9); eyes.add(stick(e, R, s * 0.12, 0.03, 0));
+    const h = new THREE.Mesh(GEO.smile, MAT.eye); h.scale.setScalar(1.5); stick(h, R, s * 0.12, 0.02, 0.006); h.rotation.z = Math.PI; happy.add(h);
+    const b = new THREE.Mesh(GEO.blush, MAT.blush); b.scale.setScalar(1.7); head.add(stick(b, R, s * 0.2, -0.06, 0.004));
+  }
+  head.add(eyes, happy);
+  happy.visible = false;
+  const snout = type === 'bear' || type === 'pup';
+  if (snout) {
+    const sn = P(new THREE.SphereGeometry(0.11, 14, 10), type === 'bear' ? 0xE8C9A0 : 0xFFF3E0, 0, 0, 0, { parent: head, outline: 'thin' });
+    stick(sn, R, 0, -0.08, -0.05); sn.scale.set(1.1, 0.8, 0.7);
+  }
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), snout ? MAT.eye : new THREE.MeshBasicMaterial({ color: 0xE8838F }));
+  head.add(stick(nose, R, 0, -0.045, snout ? 0.032 : 0.004));
+  const mouth = new THREE.Mesh(GEO.smile, MAT.eye); mouth.scale.setScalar(1.3);
+  head.add(stick(mouth, R, 0, -0.115, snout ? 0.03 : 0.006));
+  const frown = new THREE.Mesh(GEO.smile, MAT.eye); frown.scale.setScalar(1.2);
+  head.add(stick(frown, R, 0, -0.14, snout ? 0.025 : 0.006));
+  frown.rotation.z = Math.PI; frown.visible = false;
+  if (type !== 'bunny' && Math.random() < 0.4) {
+    const hc = pick([0xE0584C, 0x5577B5, 0x74B35A, 0xF4A646]);
+    const hat = P(new THREE.SphereGeometry(0.22, 16, 10), hc, 0.04, 0.3, 0, { parent: head });
+    hat.scale.set(1.1, 0.4, 1.1); hat.rotation.z = -0.25;
+    P(new THREE.CylinderGeometry(0.02, 0.02, 0.07, 6), hc, 0.01, 0.4, 0, { parent: head, outline: 'thin' });
+  }
+  return { g, head, eyes, happy, mouth, frown, arms };
+}
+
+class Customer {
+  constructor(spot, order, patient) {
+    this.spot = spot; spot.c = this;
+    this.type = pick(CUST_TYPES);
+    this.m = buildCustomerMesh(this.type);
+    this.g = this.m.g;
+    scene.add(this.g);
+    this.pos = V(DOOR.x, 0, OUT_Z);
+    this.path = [V(DOOR.x, 0, LANE_Z), V(spot.x, 0, LANE_Z + 0.15), V(spot.x, 0, spot.z)];
+    this.state = 'enter';
+    this.order = order;
+    this.wait = 0;
+    this.patience = patient ? Infinity : rand(55, 70) * patienceMult();
+    this.yaw = Math.PI; this.t = rand(0, 10);
+    this.moodT = 0; this.sayT = 0; this.hop = 0; this.blinkT = rand(1, 4); this.bonkT = -9; this.leaveT = 0;
+    this.body = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC, collisionFilterGroup: GRP.CUST, collisionFilterMask: MASK.CUST });
+    this.body.addShape(new CANNON.Sphere(0.42 * CUST_S), new CANNON.Vec3(0, 0.95 * CUST_S, 0));
+    this.body.addShape(new CANNON.Sphere(0.32 * CUST_S), new CANNON.Vec3(0, 0.35 * CUST_S, 0));
+    this.body.position.set(this.pos.x, 0, this.pos.z);
+    this.body.userData = { customer: this };
+    world.addBody(this.body);
+    this.bubble = new Anchor('bub order');
+    this.bubble.show(false);
+    this.zoneRoot = new THREE.Group();
+    scene.add(this.zoneRoot);
+    this.zone = makeZone(new THREE.BoxGeometry(1.35, 2.0, 2.2), 0, 1.3, 0.6, {
+      visual: this.g,
+      accepts: (it) => this.state === 'wait' && it.info.type === 'good',
+      drop: (it) => this.receive(it),
+      snap: (it) => V(this.pos.x, COUNTER_H + 0.5 + it.radius, this.pos.z + 1.0),
+    }, this.zoneRoot);
+    customers.push(this);
+    Sound.bell();
+    DOOR.ringT = T + 1;
+  }
+  showOrder() {
+    this.bubble.setClass('bub order')
+      .set(`<img src="${ICON[this.order]}" alt="${ITEMS[this.order].name}"><div class="pat"><i></i></div>`)
+      .show(true);
+    this.patEl = this.bubble.inner.querySelector('.pat i');
+    this.patShown = -1;
+  }
+  say(text, dur = 1.8) {
+    this.sayT = dur;
+    this.patEl = null;
+    this.bubble.setClass('bub say').set(text).show(true);
+  }
+  setMood(m, dur = 0) {
+    this.moodT = dur;
+    this.m.eyes.visible = m !== 'happy';
+    this.m.happy.visible = m === 'happy';
+    this.m.mouth.visible = m !== 'sad';
+    this.m.frown.visible = m === 'sad';
+  }
+  receive(it) {
+    if (this.state !== 'wait') return false;
+    if (it.kind !== this.order) {
+      this.say(pick(["That's not my order!", 'Hmm, not that one…', 'I ordered something else!']));
+      this.setMood('sad', 1.4); Sound.sad();
+      return false;
+    }
+    const st = it.state;
+    if (st === 'raw') { this.say("It's still raw!"); this.setMood('sad', 1.4); Sound.sad(); return false; }
+    if (st === 'burnt') { this.say("Eek, it's burnt!"); this.setMood('sad', 1.4); Sound.sad(); return false; }
+    this.serve(it);
+    return true;
+  }
+  onHit(it, v) {
+    if (this.state !== 'wait' || it.location !== 'world') return;
+    if (it.info.type === 'good') { this.receive(it); return; }
+    if (v > 2 && T - this.bonkT > 0.8) {
+      this.bonkT = T;
+      this.say(pick(['Hey!', 'Ouch!', 'Eep!']), 1.1);
+      this.setMood('sad', 0.9);
+      this.hop = 0.6;
+    }
+  }
+  serve(it) {
+    this.state = 'served';
+    this.leaveT = 1.3;
+    it.removeBody();
+    it.location = 'anim';
+    const from = it.mesh.position.clone(), to = V(this.pos.x, 1.1, this.pos.z + 0.2);
+    tween(0.35, (k) => {
+      it.mesh.position.lerpVectors(from, to, smooth(k));
+      it.mesh.position.y += Math.sin(k * Math.PI) * 0.3;
+      it.mesh.scale.setScalar(ITEM_S * (1 - 0.8 * k));
+    }, () => destroyItem(it));
+    const rec = RECIPES.find((r) => r.sells === this.order);
+    const base = Math.round(rec.price * priceMult());
+    const frac = this.patience === Infinity ? 1 : clamp(1 - this.wait / this.patience, 0, 1);
+    let tip = Math.round(base * 0.35 * frac);
+    if (has('cat')) tip += Math.max(1, Math.round(base * 0.15));
+    const total = base + tip;
+    this.setMood('happy', 99);
+    this.hop = 1;
+    this.say(tip > 0 ? `Yum! (+${tip} tip)` : 'Yum!', 1.3);
+    hearts(V(this.pos.x, 2.0, this.pos.z), 4);
+    Sound.yay();
+    floatText(`+${total}`, V(this.pos.x, 2.5, this.pos.z));
+    spawnCoins(this.pos, total);
+    state.served++;
+    save();
+  }
+  leave(happy) {
+    if (this.state === 'leave') return;
+    this.state = 'leave';
+    this.spot.c = null;
+    if (!happy) {
+      this.setMood('sad', 99);
+      this.say(pick(['Hmph! Too slow.', 'I’ll come back later…', 'Took too long!']), 1.6);
+      Sound.sad();
+    } else if (this.sayT <= 0) this.bubble.show(false);
+    this.path = [V(this.pos.x, 0, LANE_Z), V(DOOR.x, 0, LANE_Z), V(DOOR.x, 0, OUT_Z)];
+  }
+  remove() {
+    scene.remove(this.g);
+    scene.remove(this.zoneRoot);
+    world.removeBody(this.body);
+    this.bubble.destroy();
+    const zi = zones.indexOf(this.zone.mesh);
+    if (zi >= 0) zones.splice(zi, 1);
+    if (hold.zone === this.zone) { hold.zone = null; }
+    customers.splice(customers.indexOf(this), 1);
+  }
+  update(dt) {
+    this.t += dt;
+    let moving = false;
+    if (this.state === 'enter' || this.state === 'leave') {
+      const tgt = this.path[0];
+      if (tgt) {
+        const dx = tgt.x - this.pos.x, dz = tgt.z - this.pos.z, dist = Math.hypot(dx, dz);
+        if (dist < 0.04) this.path.shift();
+        else {
+          const step = Math.min(dist, 1.9 * dt);
+          this.pos.x += (dx / dist) * step;
+          this.pos.z += (dz / dist) * step;
+          this.yaw = dampAngle(this.yaw, Math.atan2(dx, dz), 10, dt);
+          moving = true;
+        }
+      }
+      if (!this.path.length) {
+        if (this.state === 'enter') { this.state = 'wait'; this.showOrder(); }
+        else { this.remove(); return; }
+      }
+    } else if (this.state === 'wait') {
+      this.yaw = dampAngle(this.yaw, 0.55, 6, dt);
+      if (this.patience !== Infinity) this.wait += dt;
+      const left = 1 - this.wait / this.patience;
+      if (left <= 0) this.leave(false);
+      else if (left < 0.25 && this.hop <= 0 && Math.random() < dt * 0.7) this.hop = 0.7;
+    } else if (this.state === 'served') {
+      this.yaw = dampAngle(this.yaw, 0.55, 6, dt);
+      this.leaveT -= dt;
+      if (this.leaveT <= 0) this.leave(true);
+    }
+    if (this.sayT > 0) {
+      this.sayT -= dt;
+      if (this.sayT <= 0) { if (this.state === 'wait') this.showOrder(); else this.bubble.show(false); }
+    }
+    if (this.patEl && this.state === 'wait') {
+      const left = this.patience === Infinity ? 1 : clamp(1 - this.wait / this.patience, 0, 1);
+      const shown = Math.round(left * 100);
+      if (shown !== this.patShown) {
+        this.patShown = shown;
+        this.patEl.style.width = `${shown}%`;
+        this.patEl.style.background = left > 0.5 ? '#74B35A' : left > 0.25 ? '#F4A646' : '#E0584C';
+      }
+    }
+    if (this.moodT > 0) { this.moodT -= dt; if (this.moodT <= 0) this.setMood('neutral'); }
+    this.blinkT -= dt;
+    if (this.blinkT < -0.12) this.blinkT = rand(2, 5);
+    this.m.eyes.scale.y = this.blinkT < 0 ? 0.15 : 1;
+    this.hop = Math.max(0, this.hop - dt * 2.5);
+    const bob = moving ? Math.abs(Math.sin(this.t * 10)) * 0.07 : 0;
+    this.g.position.set(this.pos.x, bob + Math.sin(this.hop * Math.PI) * 0.22, this.pos.z);
+    this.g.rotation.y = this.yaw;
+    this.g.scale.set(CUST_S, CUST_S * (1 + Math.sin(this.t * 2.4) * 0.015), CUST_S);
+    const swing = moving ? Math.sin(this.t * 10) * 0.5 : 0;
+    this.m.arms[0].rotation.x = swing;
+    this.m.arms[1].rotation.x = -swing;
+    this.m.arms[1].rotation.z = this.m.happy.visible ? 2.4 + Math.sin(this.t * 14) * 0.35 : 0.35;
+    this.body.position.set(this.pos.x, 0, this.pos.z);
+    this.zoneRoot.position.copy(this.pos);
+    this.bubble.pos.set(this.pos.x, (this.type === 'bunny' ? 2.6 : 2.3) + (this.state === 'wait' || this.state === 'served' ? this.spot.bubbleUp : 0), this.pos.z);
+  }
+}
+
+let spawnT = 3;
+function updateSpawner(dt) {
+  if (!started) return;
+  if (!state.tutorialDone && state.served === 0) {
+    if (!customers.length) { spawnT -= dt; if (spawnT <= 0) new Customer(SPOTS[1], 'toast', true); }
+    return;
+  }
+  spawnT -= dt;
+  if (spawnT > 0) return;
+  const free = SPOTS.filter((s) => !s.c);
+  if (!free.length) { spawnT = 2; return; }
+  const menu = RECIPES.filter(recipeKnown).map((r) => r.sells);
+  const order = pick(menu.concat(menu.slice(-2)));
+  new Customer(pick(free), order, false);
+  const waiting = customers.filter((c) => c.state !== 'leave').length;
+  spawnT = rand(11, 18) * spawnMult() * (waiting <= 1 ? 0.6 : 1);
+}
+
+function updateDoor(dt) {
+  const near = customers.some((c) => Math.abs(c.pos.x - DOOR.x) < 0.8 && c.pos.z < -3.55);
+  DOOR.angle = damp(DOOR.angle, near ? 1.35 : 0, 7, dt);
+  DOOR.pivot.rotation.y = DOOR.angle;
+  if (DECOR.bell.visible) DECOR.bellCup.rotation.z = Math.sin(T * 16) * 0.45 * clamp((DOOR.ringT || 0) - T, 0, 1);
+}
+
+/* =====================================================================
+   Coins
+   ===================================================================== */
+function spawnCoins(pos, total) {
+  const n = clamp(Math.ceil(total / 4), 2, 8);
+  let left = total;
+  for (let i = 0; i < n; i++) {
+    const v = i === n - 1 ? left : Math.floor(total / n);
+    left -= v;
+    const c = new Item('coin', pos.x + rand(-0.25, 0.25), 1.5 + i * 0.06, pos.z + 0.4);
+    c.value = v;
+    c.body.velocity.set(rand(-1, 1), rand(3.5, 5), rand(2.2, 3.2));
+    c.body.angularVelocity.set(rand(-8, 8), rand(-8, 8), rand(-8, 8));
+    c.collectAt = T + 1.1 + i * 0.08;
+  }
+}
+function updateCoins() {
+  for (const it of items) if (it.kind === 'coin' && it.location === 'world' && T >= it.collectAt) collectCoin(it);
+}
+function collectCoin(it) {
+  if (it.collected) return;
+  it.collected = true;
+  const s = toScreen(it.mesh.position);
+  const value = it.value || 1;
+  destroyItem(it);
+  const el = document.createElement('div');
+  el.className = 'coin fly';
+  document.body.appendChild(el);
+  const r = $('coinsPill').getBoundingClientRect();
+  const tx = r.left + 20, ty = r.top + r.height / 2;
+  const anim = el.animate([
+    { transform: `translate(${s.x - 13}px, ${s.y - 13}px) scale(1)` },
+    { transform: `translate(${(s.x + tx) / 2 - 13}px, ${Math.min(s.y, ty) - 70}px) scale(1.25)`, offset: 0.4 },
+    { transform: `translate(${tx - 13}px, ${ty - 13}px) scale(0.8)` },
+  ], { duration: 650, easing: 'ease-in' });
+  anim.onfinish = () => { el.remove(); addCoins(value); };
+}
+function addCoins(n) {
+  state.coins += n;
+  state.earned += n;
+  save();
+  Sound.coin();
+  const pill = $('coinsPill');
+  pill.classList.remove('bump'); void pill.offsetWidth; pill.classList.add('bump');
+  updateShopBadge();
+}
+
+/* =====================================================================
+   Pointer interaction: grab, hold, drop, throw, pan, zoom
+   ===================================================================== */
+const pointer = { x: -999, y: -999, ndc: new THREE.Vector2(-9, -9), type: 'mouse' };
+const raycaster = new THREE.Raycaster();
+const hold = { item: null, target: new CANNON.Vec3(), yaw: 0, zone: null, marker: null, pointerId: null };
+const touches = new Map();
+let panDrag = null, pinch = null, hoverObj = null;
+const Y_AXIS = new CANNON.Vec3(0, 1, 0);
+const _rr = new CANNON.RaycastResult(), _from = new CANNON.Vec3(), _to = new CANNON.Vec3();
+const _qa = new CANNON.Quaternion(), _qb = new CANNON.Quaternion(), _qc = new CANNON.Quaternion();
+const _xv = new CANNON.Vec3(1, 0, 0), _xo = new CANNON.Vec3();
+
+function setPointer(e) {
+  pointer.x = e.clientX; pointer.y = e.clientY;
+  pointer.type = e.pointerType || 'mouse';
+  pointer.ndc.set((e.clientX / view.W) * 2 - 1, -(e.clientY / view.H) * 2 + 1);
+}
+function isShown(o) { for (; o; o = o.parent) if (!o.visible) return false; return true; }
+function pickAt() {
+  raycaster.setFromCamera(pointer.ndc, camera);
+  const hits = raycaster.intersectObjects(pickables, true);
+  let other = null;
+  for (const h of hits) {
+    if (!isShown(h.object)) continue;
+    let o = h.object;
+    while (o && !o.userData.item && !o.userData.source && !o.userData.action) o = o.parent;
+    if (!o) continue;
+    if (o.userData.item) {
+      const it = o.userData.item;
+      if (it.location === 'world' || it.location === 'oven') return { item: it };
+      continue;
+    }
+    if (!other) other = o.userData.source ? { source: sources.find((s) => s.key === o.userData.source) } : { action: o.userData.action };
+  }
+  return other;
+}
+function yawOf(q) { q.vmult(_xv, _xo); return Math.atan2(-_xo.z, _xo.x); }
+
+function grab(it) {
+  if (it.location === 'oven') {
+    ovenTake(it);
+    it.place(OVEN.front + it.radius + 0.12, 1.2 + it.rest, it.mesh.position.z, it.mesh.quaternion);
+  }
+  it.location = 'held';
+  it.addBody();
+  it.body.collisionFilterGroup = GRP.HELD;
+  it.body.allowSleep = false;   // a held item hovering still must never doze off mid-air
+  it.body.wakeUp();
+  hold.item = it;
+  hold.yaw = yawOf(it.body.quaternion);
+  canvas.style.cursor = 'grabbing';
+  setHover(null);
+  showTip('');
+  Sound.grab();
+  updateHoldTarget();
+}
+function updateHoldTarget() {
+  const it = hold.item;
+  if (!it) return;
+  raycaster.setFromCamera(pointer.ndc, camera);
+  const o = raycaster.ray.origin, d = raycaster.ray.direction;
+  _from.set(o.x, o.y, o.z);
+  _to.set(o.x + d.x * 200, o.y + d.y * 200, o.z + d.z * 200);
+  _rr.reset();
+  world.raycastClosest(_from, _to, { collisionFilterMask: GRP.STATIC | GRP.ITEM, skipBackfaces: true }, _rr);
+  let px, py, pz, nx = 0, ny = 1, nz = 0;
+  if (_rr.hasHit) {
+    px = _rr.hitPointWorld.x; py = _rr.hitPointWorld.y; pz = _rr.hitPointWorld.z;
+    nx = _rr.hitNormalWorld.x; ny = _rr.hitNormalWorld.y; nz = _rr.hitNormalWorld.z;
+  } else {
+    const t = -o.y / d.y;
+    px = o.x + d.x * t; py = 0; pz = o.z + d.z * t;
+  }
+  const r = it.radius, lift = 0.55;
+  const tx = clamp(px + nx * r, -5.3, 5.6), tz = clamp(pz + nz * r, -4.3, 4.6);
+  let ty = py + (ny > 0.5 ? r + lift : r * 0.5 + lift * 0.5);
+  // always float clearly above whatever is underneath (e.g. when pointing at the side of a counter)
+  _from.set(tx, ty + r, tz);
+  _to.set(tx, -1, tz);
+  _rr.reset();
+  world.raycastClosest(_from, _to, { collisionFilterMask: GRP.STATIC | GRP.ITEM, skipBackfaces: true }, _rr);
+  if (_rr.hasHit) ty = Math.max(ty, _rr.hitPointWorld.y + r + 0.3);
+  hold.target.set(tx, clamp(ty, r + 0.05, 6), tz);
+  // drop targets act like magnets so you can see exactly where it'll go
+  if (hold.zone && hold.zone.snap) {
+    const p = hold.zone.snap(it);
+    hold.target.set(p.x, p.y, p.z);
+  }
+}
+// Held items are steered with velocities so they still collide with everything
+world.addEventListener('preStep', () => {
+  const it = hold.item;
+  if (!it) return;
+  const b = it.body, t = hold.target;
+  let vx = (t.x - b.position.x) * 14, vy = (t.y - b.position.y) * 14, vz = (t.z - b.position.z) * 14;
+  const s = Math.hypot(vx, vy, vz), max = 14;
+  if (s > max) { vx *= max / s; vy *= max / s; vz *= max / s; }
+  b.velocity.set(vx, vy, vz);
+  _qa.setFromAxisAngle(Y_AXIS, hold.yaw);
+  b.quaternion.conjugate(_qb);
+  _qa.mult(_qb, _qc);
+  if (_qc.w < 0) { _qc.x = -_qc.x; _qc.y = -_qc.y; _qc.z = -_qc.z; }
+  b.angularVelocity.set(_qc.x * 20, _qc.y * 20, _qc.z * 20);
+});
+function updateZone() {
+  const it = hold.item;
+  let z = null;
+  if (it) {
+    raycaster.setFromCamera(pointer.ndc, camera);
+    for (const h of raycaster.intersectObjects(zones, false)) {
+      const d = h.object.userData.zone;
+      if (d.accepts(it)) { z = d; break; }
+    }
+  }
+  if (z !== hold.zone) {
+    if (hold.zone) highlight(hold.zone.visual, false);
+    hold.zone = z;
+    if (z) highlight(z.visual, true);
+  }
+}
+function endHold() {
+  if (hold.zone) highlight(hold.zone.visual, false);
+  hold.zone = null;
+  hold.item = null;
+  canvas.style.cursor = '';
+  if (hold.marker) hold.marker.visible = false;
+}
+function release(cancel = false) {
+  const it = hold.item;
+  if (!it) return;
+  const zone = hold.zone;
+  endHold();
+  it.location = 'world';
+  it.body.collisionFilterGroup = GRP.ITEM;
+  it.body.allowSleep = true;
+  it.body.wakeUp();
+  if (!cancel && zone && zone.drop(it)) return;
+  const v = it.body.velocity, s = v.length();
+  if (cancel) v.setZero();
+  else if (s > 12) v.scale(12 / s, v);
+  if (!cancel && s > 7) Sound.whoosh();
+}
+function buildMarker() {
+  hold.marker = new THREE.Mesh(new THREE.RingGeometry(0.13, 0.2, 28), new THREE.MeshBasicMaterial({ color: INK, transparent: true, opacity: 0.45, depthWrite: false }));
+  hold.marker.renderOrder = 6;
+  hold.marker.visible = false;
+  scene.add(hold.marker);
+}
+const _down = new CANNON.Vec3();
+function updateMarker() {
+  const it = hold.item;
+  if (!it) { hold.marker.visible = false; return; }
+  const p = it.body.position;
+  _from.set(p.x, p.y, p.z);
+  _down.set(p.x, p.y - 30, p.z);
+  _rr.reset();
+  world.raycastClosest(_from, _down, { collisionFilterMask: GRP.STATIC | GRP.ITEM, skipBackfaces: true }, _rr);
+  if (!_rr.hasHit) { hold.marker.visible = false; return; }
+  const h = _rr.hitPointWorld;
+  hold.marker.visible = true;
+  hold.marker.position.set(h.x, h.y + 0.02, h.z);
+  hold.marker.rotation.set(-Math.PI / 2, 0, 0);
+  hold.marker.scale.setScalar(clamp(it.radius / 0.2, 0.8, 1.8));
+  hold.marker.material.color.set(hold.zone ? 0xFF9A2E : INK);
+}
+
+function setHover(obj) {
+  if (obj === hoverObj) return;
+  if (hoverObj) highlight(hoverObj, false);
+  hoverObj = obj;
+  if (obj) highlight(obj, true);
+}
+const tipEl = $('tip');
+function showTip(text) {
+  if (!text) { tipEl.classList.remove('on'); return; }
+  if (tipEl.textContent !== text) tipEl.textContent = text;
+  tipEl.style.transform = `translate(${pointer.x + 16}px, ${pointer.y + 18}px)`;
+  tipEl.classList.add('on');
+}
+function updateHover() {
+  if (!started || hold.item || pointer.type !== 'mouse' || panDrag || anyPanelOpen()) {
+    setHover(null); showTip('');
+    if (!hold.item) canvas.style.cursor = '';
+    return;
+  }
+  const hit = pickAt();
+  let obj = null, tip = '', cursor = '';
+  if (hit && hit.item) {
+    if (hit.item.kind === 'coin') collectCoin(hit.item);
+    else { obj = hit.item.mesh; tip = hit.item.label; cursor = 'grab'; }
+  } else if (hit && hit.source) {
+    const s = hit.source;
+    obj = s.g; tip = ITEMS[s.key].name + (s.locked ? ' (locked)' : ''); cursor = s.locked ? 'not-allowed' : 'grab';
+  } else if (hit && hit.action === 'mix' && BOWL.match) { obj = BOWL.mesh; tip = 'Mix!'; cursor = 'pointer'; }
+  else if (hit && hit.action === 'cat') { obj = CAT.g; tip = 'Pet the cat'; cursor = 'pointer'; }
+  setHover(obj);
+  showTip(tip);
+  canvas.style.cursor = cursor;
+}
+
+function screenToCam(sx, sy) {
+  return { x: lerp(camera.left, camera.right, sx / view.W), y: lerp(camera.top, camera.bottom, sy / view.H) };
+}
+function zoomAt(sx, sy, factor) {
+  const before = screenToCam(sx, sy);
+  view.zoom = clamp(view.zoom * factor, 1, 3);
+  layoutCamera();
+  const after = screenToCam(sx, sy);
+  view.panX += before.x - after.x;
+  view.panY += before.y - after.y;
+  layoutCamera();
+}
+function startPinch() {
+  const [a, b] = [...touches.values()];
+  pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom: view.zoom, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+}
+function updatePinch() {
+  const [a, b] = [...touches.values()];
+  const d = Math.hypot(a.x - b.x, a.y - b.y), cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+  zoomAt(cx, cy, clamp((pinch.zoom * d) / pinch.d, 1, 3) / view.zoom);
+  const u = 1 / view.ppu;
+  view.panX -= (cx - pinch.cx) * u;
+  view.panY += (cy - pinch.cy) * u;
+  pinch.cx = cx; pinch.cy = cy;
+  layoutCamera();
+}
+function anyPanelOpen() { return !$('shop').classList.contains('hidden') || !$('help').classList.contains('hidden'); }
+
+canvas.addEventListener('pointerdown', (e) => {
+  Sound.init();
+  if (!started) return;
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  if (touches.size === 2 && !hold.item) { panDrag = null; startPinch(); return; }
+  if (touches.size > 1) return;
+  setPointer(e);
+  if (e.pointerType === 'mouse' && e.button !== 0) { panDrag = { x: e.clientX, y: e.clientY, px: view.panX, py: view.panY }; return; }
+  hold.pointerId = e.pointerId;
+  const hit = pickAt();
+  if (hit && hit.item) { if (hit.item.kind === 'coin') collectCoin(hit.item); else grab(hit.item); }
+  else if (hit && hit.source) takeFromSource(hit.source);
+  else if (hit && hit.action === 'mix' && BOWL.match) startMix();
+  else if (hit && hit.action === 'cat') petCat();
+  else panDrag = { x: e.clientX, y: e.clientY, px: view.panX, py: view.panY };
+});
+window.addEventListener('pointermove', (e) => {
+  if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pinch) { if (touches.size >= 2) updatePinch(); return; }
+  if (touches.size > 1) return;
+  setPointer(e);
+  if (panDrag && !hold.item) {
+    const u = 1 / view.ppu;
+    view.panX = panDrag.px - (e.clientX - panDrag.x) * u;
+    view.panY = panDrag.py + (e.clientY - panDrag.y) * u;
+    layoutCamera();
+  }
+});
+function onPointerUp(e) {
+  touches.delete(e.pointerId);
+  if (pinch) { if (touches.size < 2) pinch = null; panDrag = null; return; }
+  if (hold.item && e.pointerId === hold.pointerId) release(e.type === 'pointercancel');
+  if (!touches.size) panDrag = null;
+}
+window.addEventListener('pointerup', onPointerUp);
+window.addEventListener('pointercancel', onPointerUp);
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  if (!started) return;
+  if (hold.item) { hold.yaw += Math.sign(e.deltaY) * (Math.PI / 8); return; }
+  zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0015));
+}, { passive: false });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+window.addEventListener('keydown', (e) => {
+  if ((e.key === 'r' || e.key === 'R') && hold.item) hold.yaw += Math.PI / 4;
+  if (e.key === 'Escape') closePanels();
+});
+window.addEventListener('blur', () => { if (hold.item) release(true); touches.clear(); panDrag = null; pinch = null; });
+
+/* =====================================================================
+   Zones, cat, clock, small helpers
+   ===================================================================== */
+function buildZones() {
+  makeZone(new THREE.CylinderGeometry(0.95, 0.95, 1.7, 16), BOWL.pos.x, BOWL.pos.y + 0.7, BOWL.pos.z, {
+    visual: BOWL.mesh,
+    accepts: (it) => it.info.type === 'ingredient' && BOWL.mixing <= 0,
+    drop: (it) => {
+      // steer it gently toward the emptiest spot in the bowl instead of teleporting (no overlaps)
+      const p = it.body.position, [ox, oz] = bowlSpot();
+      it.body.velocity.set((BOWL.pos.x + ox - p.x) * 2.2, -1, (BOWL.pos.z + oz - p.z) * 2.2);
+      it.body.angularVelocity.scale(0.3, it.body.angularVelocity);
+      Sound.plop();
+      return true;
+    },
+    snap: (it) => {
+      // hover just above whatever is already in the bowl
+      let top = BOWL.pos.y + 0.55;
+      for (const o of BOWL.contents) top = Math.max(top, o.body.position.y + o.radius);
+      const [ox, oz] = bowlSpot();
+      return V(BOWL.pos.x + ox, top + 0.3 + it.radius, BOWL.pos.z + oz);
+    },
+  });
+  makeZone(new THREE.BoxGeometry(1.1, 2.3, 2.7), OVEN.front - 0.2, 1.75, OVEN.zc, {
+    visual: OVEN.mesh, accepts: ovenAccepts, drop: ovenInsert,
+    snap: (it) => {
+      const slot = OVEN.slots.find((sl) => !sl.item) || OVEN.slots[1];
+      return V(OVEN.front + 0.4 + it.radius, 1.35 + it.radius, slot.pos.z);
+    },
+  });
+  makeZone(new THREE.CylinderGeometry(0.6, 0.6, 1.5, 16), TRASH.pos.x, 0.75, TRASH.pos.z, {
+    visual: TRASH.mesh, accepts: (it) => it.kind !== 'coin', drop: trashDrop,
+    snap: (it) => V(TRASH.pos.x, 1.2 + it.radius, TRASH.pos.z),
+  });
+}
+function petCat() {
+  CAT.awake = 2.5;
+  CAT.openEyes.visible = true;
+  CAT.sleepEyes.visible = false;
+  const p = new THREE.Vector3();
+  CAT.head.getWorldPosition(p);
+  hearts(V(p.x, p.y + 0.3, p.z), 3);
+  Sound.meow();
+  tween(0.3, (k) => { CAT.head.position.y = 0.42 + Math.sin(k * Math.PI) * 0.08; });
+}
+function updateCat(dt) {
+  if (!CAT.g.visible) return;
+  const b = 1 + Math.sin(T * 2.2) * 0.035;
+  CAT.body.scale.set(1.3 * b, 0.72 * b, 1.02);
+  if (CAT.awake > 0) {
+    CAT.awake -= dt;
+    if (CAT.awake <= 0) { CAT.openEyes.visible = false; CAT.sleepEyes.visible = true; }
+  } else if (Math.random() < dt * 0.45) {
+    const p = new THREE.Vector3();
+    CAT.head.getWorldPosition(p);
+    particle(TEX.zz, V(p.x + 0.1, p.y + 0.3, p.z), { vel: V(0.12, 0.35, 0.05), life: 1.8, size: 0.2, grow: 1.5 });
+  }
+}
+function updateClock() {
+  const d = new Date();
+  const m = d.getMinutes() + d.getSeconds() / 60, h = (d.getHours() % 12) + m / 60;
+  CLOCK.m.rotation.z = -(m / 60) * Math.PI * 2;
+  CLOCK.h.rotation.z = -(h / 12) * Math.PI * 2;
+}
+const ARROW = {};
+function buildArrow() {
+  const g = new THREE.Group();
+  P(new THREE.ConeGeometry(0.22, 0.34, 16), 0xF4A646, 0, 0, 0, { parent: g, rx: Math.PI, cast: false });
+  P(new THREE.CylinderGeometry(0.085, 0.085, 0.32, 12), 0xF4A646, 0, 0.3, 0, { parent: g, cast: false });
+  g.visible = false;
+  scene.add(g);
+  ARROW.g = g;
+}
+function pointArrow(p) {
+  if (!p) { ARROW.g.visible = false; return; }
+  ARROW.g.visible = true;
+  ARROW.g.position.set(p.x, p.y + 0.45 + Math.abs(Math.sin(T * 4)) * 0.22, p.z);
+  ARROW.g.rotation.y = T * 1.5;
+}
+
+/* =====================================================================
+   HUD, shop, help, tutorial
+   ===================================================================== */
+let shopTab = 'recipes';
+function renderShop() {
+  const coin = '<span class="coin s"></span>';
+  let html = '';
+  if (shopTab === 'recipes') {
+    for (const r of RECIPES) {
+      const known = recipeKnown(r);
+      const ings = Object.entries(r.needs).map(([k, n]) =>
+        `<img src="${ICON[k]}" alt="${ITEMS[k].name}" title="${ITEMS[k].name}">${n > 1 ? `×${n}` : ''}`).join('<span class="op">+</span>');
+      const tail = r.topping
+        ? `<span class="op">→ bake →</span><img src="${ICON[r.makes]}" alt=""><span class="op">+</span><img src="${ICON[r.topping]}" alt="${ITEMS[r.topping].name}" title="${ITEMS[r.topping].name}">`
+        : '<span class="op">→ bake</span>';
+      const action = known
+        ? '<span class="owned">✓ Known</span>'
+        : `<button class="btn buy" data-buy="r:${r.id}" ${state.coins < r.cost ? 'disabled' : ''}>${coin} ${r.cost}</button>`;
+      html += `<div class="row ${known ? '' : 'locked'}"><div class="pic"><img src="${ICON[r.sells]}" alt=""></div>
+        <div><h3>${ITEMS[r.sells].name}</h3><div class="ings">${ings}${tail}</div>
+        <p>Sells for ${coin} ${Math.round(r.price * priceMult())}</p></div><div>${action}</div></div>`;
+    }
+  } else {
+    for (const u of UPGRADES) {
+      const owned = has(u.id);
+      const action = owned
+        ? '<span class="owned">✓ Owned</span>'
+        : `<button class="btn buy" data-buy="u:${u.id}" ${state.coins < u.cost ? 'disabled' : ''}>${coin} ${u.cost}</button>`;
+      html += `<div class="row ${owned ? '' : 'locked'}"><div class="pic">${u.icon}</div>
+        <div><h3>${u.name}</h3><p>${u.desc}</p></div><div>${action}</div></div>`;
+    }
+  }
+  $('shopList').innerHTML = html;
+}
+$('shopList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-buy]');
+  if (!b || b.disabled) return;
+  const [kind, id] = b.dataset.buy.split(':');
+  if (kind === 'r') {
+    const r = RECIPES.find((x) => x.id === id);
+    if (!r || recipeKnown(r) || state.coins < r.cost) return;
+    state.coins -= r.cost;
+    state.recipes.push(id);
+    toast(`New recipe: <b>${ITEMS[r.sells].name}</b>!`);
+  } else {
+    const u = UPGRADES.find((x) => x.id === id);
+    if (!u || has(id) || state.coins < u.cost) return;
+    state.coins -= u.cost;
+    state.upgrades.push(id);
+    toast(`<b>${u.name}</b> added to the bakery!`);
+  }
+  save();
+  Sound.unlock();
+  applyProgress();
+  renderShop();
+});
+function updateShopBadge() {
+  const can = RECIPES.some((r) => !recipeKnown(r) && state.coins >= r.cost) || UPGRADES.some((u) => !has(u.id) && state.coins >= u.cost);
+  $('shopBadge').classList.toggle('on', can && state.tutorialDone);
+  if (!$('shop').classList.contains('hidden')) renderShop();
+}
+function updateSoundBtn() { $('soundBtn').textContent = state.muted ? '🔇' : '🔊'; }
+function openPanel(id) {
+  closePanels();
+  if (hold.item) release(true);
+  $(id).classList.remove('hidden');
+  if (id === 'shop') renderShop();
+  if (id === 'help') $('stats').textContent = `Customers served: ${state.served} · Coins earned: ${state.earned}`;
+}
+function closePanels() {
+  $('shop').classList.add('hidden');
+  $('help').classList.add('hidden');
+}
+$('shopBtn').addEventListener('click', () => { Sound.init(); Sound.click(); openPanel('shop'); });
+$('helpBtn').addEventListener('click', () => { Sound.init(); Sound.click(); openPanel('help'); });
+$('soundBtn').addEventListener('click', () => { Sound.init(); Sound.setMuted(!state.muted); updateSoundBtn(); Sound.click(); });
+document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closePanels));
+document.querySelectorAll('#shop, #help').forEach((o) => o.addEventListener('pointerdown', (e) => { if (e.target === o) closePanels(); }));
+document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
+  shopTab = t.dataset.tab;
+  document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === t));
+  renderShop();
+  Sound.click();
+}));
+$('resetBtn').addEventListener('click', () => {
+  if (!confirm('Start over? This clears your coins, recipes and upgrades.')) return;
+  clearTimeout(saveTimer);
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
+  location.reload();
+});
+labelsEl.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if (!b) return;
+  if (b.dataset.act === 'mix') startMix();
+  else if (b.dataset.act === 'tip') tipBowl();
+});
+
+let coinShown = -1, servedShown = -1;
+function updateHUD() {
+  if (state.coins !== coinShown) { coinShown = state.coins; $('coinText').textContent = state.coins; }
+  if (state.served !== servedShown) { servedShown = state.served; $('servedText').textContent = state.served; }
+}
+function applyProgress() {
+  DECOR.cozy.visible = has('cozy');
+  DECOR.awning.visible = has('awning');
+  DECOR.bell.visible = has('bell');
+  CAT.g.visible = has('cat');
+  if (has('cozy') && !DECOR.cozyCol) DECOR.cozyCol = colBox(5.3, 0.33, 2.55, 0.4, 0.33, 0.4);
+  if (has('cat') && !CAT.col) CAT.col = colBox(2.75, 0.25, 3.45, 0.45, 0.25, 0.42);
+  refreshSources();
+  drawMenu();
+  updateShopBadge();
+  updateSoundBtn();
+}
+
+let hintHtml = '', tutEndT = 0;
+function showHint(html) {
+  const h = $('hint');
+  if (html !== hintHtml) { hintHtml = html; h.innerHTML = html; }
+  h.classList.remove('hide');
+}
+function hideHint() { $('hint').classList.add('hide'); hintHtml = ''; }
+function updateTutorial() {
+  if (!started || state.tutorialDone) { pointArrow(null); return; }
+  const toasts = [...items].filter((i) => i.kind === 'toast');
+  const inOven = toasts.find((i) => i.slot);
+  const out = toasts.filter((i) => !i.slot && i.location !== 'anim');
+  const baked = out.find((i) => i.state === 'baked');
+  const raw = out.find((i) => i.state === 'raw');
+  const burnt = out.find((i) => i.state === 'burnt');
+  const c = countKinds(BOWL.contents);
+  const cust = customers.find((cu) => cu.order === 'toast' && cu.state === 'wait');
+  const src = (k) => { const s = sources.find((x) => x.key === k); return V(s.g.position.x, s.g.position.y + 0.8, s.g.position.z); };
+  const bowlTop = V(BOWL.pos.x, BOWL.pos.y + 0.6, BOWL.pos.z), ovenTop = V(OVEN.front, 2.9, OVEN.zc);
+  let text, target = null;
+  if (state.served >= 1) {
+    text = 'Yay, your first sale! 🎉 Spend coins in the <b>Shop</b> to learn new recipes.';
+    if (!tutEndT) tutEndT = T + 7;
+    if (T > tutEndT) { state.tutorialDone = true; save(); hideHint(); updateShopBadge(); pointArrow(null); return; }
+  } else if (baked) {
+    text = 'Now give it to the customer: drop it on them, or <b>throw it!</b>';
+    if (cust) target = V(cust.pos.x, 2.9, cust.pos.z);
+  } else if (inOven && inOven.progress >= 1) {
+    text = "It's golden! <b>Drag it out</b> before it burns!";
+    target = V(inOven.mesh.position.x, inOven.mesh.position.y + 0.55, inOven.mesh.position.z);
+  } else if (inOven) {
+    text = 'Baking… take it out when the ring turns <b>green</b>.';
+  } else if (raw) {
+    text = 'Drag the dough into the <b>oven</b>.';
+    target = ovenTop;
+  } else if (burnt) {
+    text = 'Oops, it burnt! Toss it in the <b>bin</b> and bake another.';
+    target = V(TRASH.pos.x, 1.0, TRASH.pos.z);
+  } else if (BOWL.mixing > 0) {
+    text = 'Mixing…';
+  } else if (BOWL.match && BOWL.match.id === 'toast') {
+    text = 'Press <b>Mix!</b> to make dough.';
+    target = bowlTop;
+  } else if (BOWL.contents.length && !BOWL.partial) {
+    text = "That's not quite right. Press <b>Tip out</b> and try again.";
+  } else if (BOWL.contents.length) {
+    const nf = 2 - (c.flour || 0), nm = 1 - (c.milk || 0);
+    const parts = [];
+    if (nf > 0) parts.push(`${nf} more flour`);
+    if (nm > 0) parts.push('a milk bottle');
+    text = `Toast needs <b>2 flour</b> and <b>1 milk</b>. Add ${parts.join(' and ')}!`;
+    target = src(nf > 0 ? 'flour' : 'milk');
+  } else {
+    text = 'A customer wants <b>toast</b>! Drag a <b>flour</b> sack from the pantry into the <b>bowl</b>.';
+    target = src('flour');
+  }
+  const h = hold.item;
+  if (h && !baked) {
+    if (h.info.type === 'ingredient') target = bowlTop;
+    else if (h.kind === 'toast' && h.state === 'raw') target = ovenTop;
+  }
+  showHint(text);
+  pointArrow(target);
+}
+
+/* =====================================================================
+   Icons: render each item once into a tiny image for the UI
+   ===================================================================== */
+const ICON = {};
+const ICON_ROT = { toast: 0.55, croissant: 2.2, baguette: 0.35, chocolate: 0.3, butter: 0.4, cinnamon: 0.5, milk: 0.3, flour: 0.3 };
+function makeIcons() {
+  const S = 128;
+  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1);
+  r.setSize(S, S);
+  r.setClearColor(0x000000, 0);
+  const sc = new THREE.Scene();
+  sc.add(new THREE.HemisphereLight(0xFFF1DA, 0xE2B27E, 1.6));
+  const dl = new THREE.DirectionalLight(0xFFF0D4, 2.3);
+  dl.position.set(3, 8, 6);
+  sc.add(dl);
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 50);
+  const oldRes = OUT.res.value.clone(), oldThick = OUT.thick.value;
+  OUT.res.value.set(S, S);
+  OUT.thick.value = 3.2;
+  const box = new THREE.Box3(), sph = new THREE.Sphere(), dir = V(1, 0.85, 1).normalize();
+  for (const kind of Object.keys(ITEMS)) {
+    if (kind === 'coin') continue;
+    const g = MODELS[kind]().g;
+    if (ITEMS[kind].type === 'good') applyBake(g, kind === 'cake' ? 1.2 : 1.1);
+    g.rotation.y = ICON_ROT[kind] ?? 0;
+    sc.add(g);
+    g.updateMatrixWorld(true);
+    box.setFromObject(g);
+    box.getBoundingSphere(sph);
+    const R = sph.radius * 1.05;
+    Object.assign(cam, { left: -R, right: R, top: R, bottom: -R });
+    cam.updateProjectionMatrix();
+    cam.position.copy(sph.center).addScaledVector(dir, 10);
+    cam.lookAt(sph.center);
+    r.render(sc, cam);
+    ICON[kind] = r.domElement.toDataURL('image/png');
+    sc.remove(g);
+    g.traverse((o) => forMats(o, (m) => { if (m.userData.bake) m.dispose(); }));
+  }
+  OUT.res.value.copy(oldRes);
+  OUT.thick.value = oldThick;
+  r.dispose();
+  r.forceContextLoss();
+}
+
+/* =====================================================================
+   Camera layout
+   ===================================================================== */
+const _v3 = new THREE.Vector3();
+function layoutCamera() {
+  const W = view.W, H = view.H;
+  camera.position.copy(CAM_TARGET).addScaledVector(CAM_DIR, 60);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(CAM_TARGET);
+  camera.updateMatrixWorld(true);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const p of ROOM_BOUNDS) {
+    _v3.copy(p).applyMatrix4(camera.matrixWorldInverse);
+    x0 = Math.min(x0, _v3.x); x1 = Math.max(x1, _v3.x);
+    y0 = Math.min(y0, _v3.y); y1 = Math.max(y1, _v3.y);
+  }
+  const small = W < 560, short = H < 520;
+  const padTop = short ? 46 : small ? 60 : 68, padBot = short ? 44 : small ? 64 : 76, padSide = small ? 6 : 24;
+  const u = Math.max((x1 - x0) / (W - padSide * 2), (y1 - y0) / (H - padTop - padBot)) / view.zoom;
+  view.ppu = 1 / u;
+  const maxPX = Math.max(0, ((x1 - x0) - (W - padSide * 2) * u) / 2);
+  const maxPY = Math.max(0, ((y1 - y0) - (H - padTop - padBot) * u) / 2);
+  view.panX = clamp(view.panX, -maxPX, maxPX);
+  view.panY = clamp(view.panY, -maxPY, maxPY);
+  const cx = (x0 + x1) / 2 + view.panX, cy = (y0 + y1) / 2 + view.panY;
+  const yc = padTop + (H - padTop - padBot) / 2;
+  camera.left = cx - (W / 2) * u;
+  camera.right = cx + (W / 2) * u;
+  camera.top = cy + yc * u;
+  camera.bottom = camera.top - H * u;
+  camera.updateProjectionMatrix();
+  OUT.thick.value = clamp(view.ppu / 36, 1.1, 2.8) * renderer.getPixelRatio();
+  labelsEl.style.setProperty('--ls', clamp(view.ppu / 55, 0.62, 1.15).toFixed(3));
+}
+let autoZoomed = false;
+function resize() {
+  view.W = window.innerWidth;
+  view.H = window.innerHeight;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
+  renderer.setSize(view.W, view.H, false);
+  const dpr = renderer.getPixelRatio();
+  OUT.res.value.set(view.W * dpr, view.H * dpr);
+  layoutCamera();
+  // small screens: start zoomed in so things are big enough to grab (drag to look around, pinch to zoom out)
+  if (!autoZoomed) {
+    autoZoomed = true;
+    if (view.ppu < 34) {
+      view.zoom = Math.min(2, 34 / view.ppu);
+      if (view.W < view.H) view.panX = -1.4;
+      layoutCamera();
+    }
+  }
+}
+
+/* =====================================================================
+   Main loop + boot
+   ===================================================================== */
+let last = performance.now();
+function tick(dt) {
+  T += dt;
+  if (hold.item) updateHoldTarget();
+  world.step(1 / 60, dt, 4);
+  processHits();
+  for (const it of items) if (it.inWorld) it.sync();
+  updateZone();
+  updateMarker();
+  updateBowl(dt);
+  updateOven(dt);
+  updateTrash();
+  updateCoins();
+  for (const c of customers.slice()) c.update(dt);
+  updateSpawner(dt);
+  updateDoor(dt);
+  updateCat(dt);
+  updateTweens(dt);
+  updateParticles(dt);
+  updateTutorial();
+}
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+  last = now;
+  tick(dt);
+  updateClock();
+  updateHover();
+  updateHUD();
+  for (const a of anchors) a.update();
+  renderer.render(scene, camera);
+}
+
+function startGame() {
+  if (started) return;
+  started = true;
+  Sound.init();
+  Sound.pop();
+  $('start').classList.add('hidden');
+  spawnT = state.tutorialDone ? 2.5 : 1.2;
+  refreshSources();
+  updateShopBadge();
+}
+
+async function boot() {
+  try {
+    await Promise.race([
+      Promise.all([document.fonts.load('700 40px Fredoka'), document.fonts.load('500 40px Fredoka')]),
+      new Promise((r) => setTimeout(r, 2500)),
+    ]);
+  } catch (e) { /* fall back to a system font */ }
+  makeTextures();
+  initModels();
+  buildShell();
+  buildOven();
+  buildPantry();
+  buildSources();
+  buildTable();
+  buildBowl();
+  buildCounter();
+  buildDisplay();
+  buildTrash();
+  buildDecor();
+  buildCat();
+  buildZones();
+  buildArrow();
+  buildMarker();
+  BOWL.anchor = new Anchor('bub bowlb');
+  BOWL.anchor.pos.set(BOWL.pos.x, BOWL.pos.y + 1.2, BOWL.pos.z);
+  BOWL.anchor.show(false);
+  makeIcons();
+  $('servedIcon').src = ICON.toast;
+  applyProgress();
+  resize();
+  window.addEventListener('resize', resize);
+  requestAnimationFrame(frame);
+  const btn = $('startBtn');
+  btn.disabled = false;
+  btn.textContent = state.served > 0 || state.coins > 0 ? 'Keep baking!' : 'Start baking!';
+  btn.addEventListener('click', startGame);
+}
+// Handy for testing: open the page with ?debug to poke at the game from the console
+if (location.search.includes('debug')) {
+  window.hb = {
+    state, items, customers, sources, BOWL, OVEN, TRASH, hold, view, camera, world, renderer, scene, pointer,
+    Item, grab, release, startMix, toScreen, SPOTS, V, layoutCamera, applyProgress, CANNON, THREE, raycaster, T: () => T,
+    advance(sec) { for (let t = 0; t < sec; t += 1 / 60) tick(1 / 60); },
+  };
+}
+
+boot().catch((err) => {
+  console.error(err);
+  $('startBtn').textContent = 'Oops! Something went wrong. Try reloading.';
+});
+</script>
 </body>
 </html>
