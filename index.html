@@ -257,6 +257,10 @@
   .logo span:last-child { font-size: clamp(58px, 14vw, 116px); }
   .title p { margin: 6px 0 10px; font-size: 20px; font-weight: 500; }
   .btn.big { height: 58px; font-size: 22px; padding: 0 30px; border-radius: 18px; box-shadow: 0 5px 0 var(--ink); }
+  .start-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  body[data-world="resto"] { background: radial-gradient(120% 90% at 50% 58%, #6B4A52 0%, #4A3340 45%, #2E2330 100%); }
+  body[data-world="resto"] .start p { color: #FFF3DA; }
+  body[data-world="resto"] #grain { opacity: .05; }
 
   @media (max-height: 520px) {
     #hud { top: 6px; }
@@ -277,7 +281,15 @@
     .row { grid-template-columns: 46px 1fr; }
     .row .pic, .row .pic img { width: 46px; height: 46px; }
     .row > :last-child { grid-column: 1 / -1; justify-self: end; }
+    #worldBtn { padding: 0; width: 40px; }
+    #worldBtn .lbl { display: none; }
   }
+  @media (max-width: 430px) {
+    #bookBtn { padding: 0; width: 40px; }
+    #bookBtn .lbl { display: none; }
+    #hud #bookBtn .ico { display: inline; }
+  }
+  #bookBtn .ico { display: none; }
 </style>
 </head>
 <body>
@@ -290,7 +302,8 @@
   <div class="pill" id="coinsPill" title="Coins"><span class="coin"></span><span id="coinText">0</span></div>
   <div class="pill sm" id="servedPill" title="Customers served"><img id="servedIcon" alt=""><span id="servedText">0</span></div>
   <div class="spacer"></div>
-  <button class="btn alt" id="bookBtn"><span class="lbl">Recipes</span></button>
+  <button class="btn alt" id="worldBtn" title="Go to the restaurant">🍷 <span class="lbl">Restaurant</span></button>
+  <button class="btn alt" id="bookBtn" title="Recipes"><span class="ico">📖</span><span class="lbl">Recipes</span></button>
   <button class="btn" id="shopBtn"><span class="lbl">Shop</span><span class="badge" id="shopBadge">!</span></button>
   <button class="btn round" id="soundBtn" aria-label="Toggle sound">🔊</button>
   <button class="btn round" id="helpBtn" aria-label="How to play">?</button>
@@ -341,8 +354,11 @@
 <div id="start" class="overlay start">
   <div class="title">
     <div class="logo"><span>Hillside</span><span>Bakery</span></div>
-    <p>Mix, bake &amp; sell cozy treats.</p>
-    <button class="btn big" id="startBtn" disabled>Warming up the oven…</button>
+    <p>Where are we cooking today?</p>
+    <div class="start-btns">
+      <button class="btn big" id="startBtn" disabled>Warming up the oven…</button>
+      <button class="btn big alt" id="startResto" disabled>Setting the tables…</button>
+    </div>
   </div>
 </div>
 
@@ -399,6 +415,22 @@ const ITEMS = {
   pie:        { name: 'Apple Pie', type: 'good', bake: 8 },
   sponge:     { name: 'Sponge Cake', type: 'good', bake: 7 },
   cake:       { name: 'Strawberry Cake', type: 'good' },
+  // restaurant pantry
+  pasta:      { name: 'Pasta', type: 'ingredient' },
+  tomato:     { name: 'Tomato', type: 'ingredient' },
+  herbs:      { name: 'Basil', type: 'ingredient' },
+  beef:       { name: 'Beef', type: 'ingredient' },
+  potato:     { name: 'Potato', type: 'ingredient' },
+  cream:      { name: 'Cream', type: 'ingredient' },
+  fish:       { name: 'Salmon', type: 'ingredient' },
+  lemon:      { name: 'Lemon', type: 'ingredient' },
+  // restaurant dishes (mains cook on the stove, desserts in the oven)
+  pastaDish:  { name: 'Pasta Pomodoro', type: 'good', bake: 5, plated: true },
+  steak:      { name: 'Steak Frites', type: 'good', bake: 6, plated: true },
+  salmon:     { name: 'Lemon Salmon', type: 'good', bake: 6, plated: true },
+  brulee:     { name: 'Crème Brûlée', type: 'good', bake: 6 },
+  souffle:    { name: 'Lemon Soufflé', type: 'good', bake: 5 },
+  pavlova:    { name: 'Strawberry Pavlova', type: 'good', bake: 7 },
   coin:       { name: 'Coin', type: 'coin' },
 };
 
@@ -426,6 +458,23 @@ const UPGRADES = [
   { id: 'awning',  icon: '🎀', name: 'Striped Trim',   cost: 250, desc: 'Fancy stripes on the glass case. Everything sells for 25% more.' },
 ];
 
+// The restaurant: mains are cooked in pans on the stove, desserts are mixed in the bowl and baked
+const RECIPES_R = [
+  { id: 'pasta',   station: 'stove', needs: { pasta: 1, tomato: 1, herbs: 1 },  makes: 'pastaDish', sells: 'pastaDish', price: 24, cost: 0 },
+  { id: 'brulee',  station: 'oven',  needs: { cream: 1, egg: 1, sugar: 1 },     makes: 'brulee',    sells: 'brulee',    price: 26, cost: 0 },
+  { id: 'souffle', station: 'oven',  needs: { egg: 1, sugar: 1, lemon: 1 },     makes: 'souffle',   sells: 'souffle',   price: 30, cost: 120 },
+  { id: 'steak',   station: 'stove', needs: { beef: 1, potato: 1, butter: 1 },  makes: 'steak',     sells: 'steak',     price: 38, cost: 150 },
+  { id: 'pavlova', station: 'oven',  needs: { egg: 1, sugar: 1, strawberry: 1 }, makes: 'pavlova',  sells: 'pavlova',   price: 34, cost: 200 },
+  { id: 'salmon',  station: 'stove', needs: { fish: 1, lemon: 1, butter: 1 },   makes: 'salmon',    sells: 'salmon',    price: 44, cost: 260 },
+];
+const UPGRADES_R = [
+  { id: 'copper',     icon: '🍳', name: 'Copper Pans',  cost: 80,  desc: 'Mains cook 35% faster on the stove.' },
+  { id: 'candles',    icon: '🕯️', name: 'Candlelight',  cost: 110, desc: 'Candles on every table. Guests wait 50% longer.' },
+  { id: 'gramophone', icon: '🎶', name: 'Gramophone',   cost: 160, desc: 'Soft music. Guests arrive more often.' },
+  { id: 'star',       icon: '⭐', name: 'Golden Star',  cost: 280, desc: 'A famous review. Every dish sells for 25% more.' },
+];
+const ALL_RECIPES = [...RECIPES, ...RECIPES_R];
+
 const BURN_AT = 2.3;     // bake progress (1 = done) at which things burn
 const ITEM_S = 1.25;     // global size of grabbable items
 
@@ -434,7 +483,7 @@ const ITEM_S = 1.25;     // global size of grabbable items
    ===================================================================== */
 const SAVE_KEY = 'hillside-bakery-v1';
 function freshState() {
-  return { coins: 0, recipes: ['toast'], upgrades: [], served: 0, earned: 0, tutorialDone: false, muted: false };
+  return { coins: 0, recipes: ['toast'], upgrades: [], served: 0, servedR: 0, earned: 0, tutorialDone: false, muted: false, world: 'bakery', restoIntro: false };
 }
 function loadState() {
   try {
@@ -452,14 +501,16 @@ function save() {
   }, 200);
 }
 const has = (id) => state.upgrades.includes(id);
-const recipeKnown = (r) => state.recipes.includes(r.id);
-const bakeMult = () => (has('hotOven') ? 0.65 : 1);
-const priceMult = () => (has('awning') ? 1.25 : 1);
-const patienceMult = () => (has('cozy') ? 1.5 : 1);
-const spawnMult = () => (has('bell') ? 0.75 : 1);
+const recipeKnown = (r) => r.cost === 0 || state.recipes.includes(r.id);
+const inResto = () => !!LV && LV.id === 'resto';
+const bakeMult = () => (!inResto() && has('hotOven') ? 0.65 : 1);
+const stoveMult = () => (has('copper') ? 0.65 : 1);
+const priceMult = () => (inResto() ? (has('star') ? 1.25 : 1) : (has('awning') ? 1.25 : 1));
+const patienceMult = () => (inResto() ? (has('candles') ? 1.5 : 1) : (has('cozy') ? 1.5 : 1));
+const spawnMult = () => (inResto() ? (has('gramophone') ? 0.75 : 1) : (has('bell') ? 0.75 : 1));
 function knownIngredients() {
   const s = new Set();
-  for (const r of RECIPES) {
+  for (const r of (LV ? LV.recipes : RECIPES)) {
     if (!recipeKnown(r)) continue;
     for (const k in r.needs) s.add(k);
     if (r.topping) s.add(r.topping);
@@ -555,6 +606,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
+let ROOT = scene;   // the active level's root group (everything a level builds goes in here)
 const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
 const CAM_DIR = new THREE.Vector3(1, 0.9, 1).normalize();
 const CAM_TARGET = new THREE.Vector3(0, 1.5, 0);
@@ -674,7 +726,7 @@ function P(geo, mat, x, y, z, o = {}) {
   if (o.rx) m.rotation.x = o.rx;
   if (o.ry) m.rotation.y = o.ry;
   if (o.rz) m.rotation.z = o.rz;
-  (o.parent || scene).add(m);
+  (o.parent || ROOT).add(m);
   return m;
 }
 
@@ -866,11 +918,96 @@ function makeTextures() {
     g.lineJoin = 'round'; g.lineWidth = 8; g.strokeStyle = '#4B2E1D'; g.strokeText('z', 32, 32);
     g.fillStyle = '#FFF6E4'; g.fillText('z', 32, 32);
   });
+  // restaurant textures
+  TEX.floorR = ctex(1024, 1024, (g, w, h) => {
+    const n = 12, t = w / n, r = rng(21);
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const light = (i + j) % 2 === 0;
+      g.fillStyle = light ? '#EFE6D2' : '#3F5C4A';
+      g.fillRect(i * t, j * t, t, t);
+      g.strokeStyle = light ? 'rgba(150, 125, 95, 0.22)' : 'rgba(255, 255, 255, 0.1)';
+      g.lineWidth = 2;
+      const y0 = j * t + r() * t;
+      g.beginPath(); g.moveTo(i * t, y0);
+      g.bezierCurveTo(i * t + t * 0.3, y0 + (r() - 0.5) * t * 0.6, i * t + t * 0.7, y0 + (r() - 0.5) * t * 0.6, i * t + t, y0 + (r() - 0.5) * t * 0.4);
+      g.stroke();
+    }
+    g.fillStyle = 'rgba(40, 30, 20, 0.3)';
+    for (let i = 0; i <= n; i++) { g.fillRect(i * t - 1, 0, 2, h); g.fillRect(0, i * t - 1, w, 2); }
+  });
+  TEX.wallR = ctex(256, 256, (g, w, h) => {
+    g.fillStyle = '#2F4A3B'; g.fillRect(0, 0, w, h);
+    // damask: a fine gold-green trellis with a small quatrefoil at every crossing
+    g.strokeStyle = '#3B5A47'; g.lineWidth = 3;
+    for (let k = -w; k <= w * 2; k += 128) {
+      g.beginPath(); g.moveTo(k, 0); g.lineTo(k + h, h); g.stroke();
+      g.beginPath(); g.moveTo(k, h); g.lineTo(k + h, 0); g.stroke();
+    }
+    for (const [cx, cy] of [[0, 0], [128, 0], [256, 0], [64, 64], [192, 64], [0, 128], [128, 128], [256, 128], [64, 192], [192, 192], [0, 256], [128, 256], [256, 256]]) {
+      g.fillStyle = '#3F6150';
+      for (let a = 0; a < 4; a++) { g.beginPath(); g.ellipse(cx + Math.cos(a * Math.PI / 2) * 9, cy + Math.sin(a * Math.PI / 2) * 9, 7, 7, 0, 0, 7); g.fill(); }
+      g.fillStyle = 'rgba(217, 178, 90, 0.45)';
+      g.beginPath(); g.arc(cx, cy, 4, 0, 7); g.fill();
+    }
+  });
+  TEX.wainR = ctex(256, 128, (g, w, h) => {
+    g.fillStyle = '#4E2F20'; g.fillRect(0, 0, w, h);
+    for (let x = 0; x < w; x += 128) {
+      g.fillStyle = '#5E3A28'; g.fillRect(x + 14, 16, 100, h - 32);
+      g.strokeStyle = '#C9A24E'; g.lineWidth = 3; g.strokeRect(x + 20, 22, 88, h - 44);
+    }
+  });
+  TEX.tiles = ctex(256, 256, (g, w, h) => {
+    g.fillStyle = '#D8D0C4'; g.fillRect(0, 0, w, h);
+    for (let j = 0; j < 8; j++) for (let i = -1; i < 5; i++) {
+      const x = i * 64 + (j % 2) * 32;
+      g.fillStyle = '#F7F4EE'; g.fillRect(x + 2, j * 32 + 2, 60, 28);
+      g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(x + 6, j * 32 + 5, 30, 4);
+    }
+  });
+  TEX.night = ctex(256, 256, (g, w, h) => {
+    const sky = g.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, '#141B35'); sky.addColorStop(1, '#43406E');
+    g.fillStyle = sky; g.fillRect(0, 0, w, h);
+    const r = rng(4);
+    g.fillStyle = '#FFF6D8';
+    for (let i = 0; i < 40; i++) { g.beginPath(); g.arc(r() * w, r() * h * 0.6, r() * 1.4 + 0.4, 0, 7); g.fill(); }
+    g.beginPath(); g.arc(190, 60, 20, 0, 7); g.fill();
+    g.fillStyle = '#141B35'; g.beginPath(); g.arc(200, 54, 18, 0, 7); g.fill();
+    let x = 0;
+    while (x < w) {
+      const bw = 22 + r() * 30, bh = 50 + r() * 80;
+      g.fillStyle = '#10152A'; g.fillRect(x, h - bh, bw, bh);
+      g.fillStyle = '#F6C96B';
+      for (let wy = h - bh + 8; wy < h - 6; wy += 12) for (let wx = x + 5; wx < x + bw - 6; wx += 9) if (r() < 0.45) g.fillRect(wx, wy, 4, 5);
+      x += bw + 2;
+    }
+  });
+  TEX.redRug = ctex(512, 512, (g, w, h) => {
+    g.fillStyle = '#8E2F3A'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#D9B25A'; g.lineWidth = 10; g.strokeRect(22, 22, w - 44, h - 44);
+    g.lineWidth = 3; g.strokeRect(44, 44, w - 88, h - 88);
+    g.fillStyle = 'rgba(217, 178, 90, 0.35)';
+    for (let y = 90; y < h - 60; y += 70) for (let x = 90; x < w - 60; x += 70) {
+      g.save(); g.translate(x, y); g.rotate(Math.PI / 4); g.fillRect(-9, -9, 18, 18); g.restore();
+    }
+  });
+  TEX.note = ctex(64, 64, (g) => {
+    g.font = '700 46px Fredoka, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineJoin = 'round'; g.lineWidth = 7; g.strokeStyle = '#4B2E1D'; g.strokeText('♪', 32, 32);
+    g.fillStyle = '#FFD65A'; g.fillText('♪', 32, 32);
+  });
+  TEX.pastaLabel = labelTex('PASTA');
   TEX.boardCanvas = document.createElement('canvas');
   TEX.boardCanvas.width = 1024; TEX.boardCanvas.height = 1024;
   TEX.board = new THREE.CanvasTexture(TEX.boardCanvas);
   TEX.board.colorSpace = THREE.SRGBColorSpace;
   TEX.board.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  TEX.menuCanvas = document.createElement('canvas');
+  TEX.menuCanvas.width = 768; TEX.menuCanvas.height = 1024;
+  TEX.menuTex = new THREE.CanvasTexture(TEX.menuCanvas);
+  TEX.menuTex.colorSpace = THREE.SRGBColorSpace;
+  TEX.menuTex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   TEX.gingham = ctex(128, 128, (g) => {
     g.fillStyle = '#FFF6EA'; g.fillRect(0, 0, 128, 128);
     g.fillStyle = 'rgba(224, 88, 76, 0.45)';
@@ -887,7 +1024,8 @@ function makeTextures() {
 
 // The recipe board on the wall: pinned cards with each treat (locked ones show a question mark)
 const ICON_IMG = {};
-function drawBoard() {
+function drawBoard(lv) {
+  if (lv.id === 'resto') { drawMenuBoard(lv); return; }
   const c = TEX.boardCanvas, g = c.getContext('2d'), w = c.width, h = c.height, r = rng(9);
   g.fillStyle = '#C99559'; g.fillRect(0, 0, w, h);
   for (let i = 0; i < 2600; i++) {
@@ -902,7 +1040,7 @@ function drawBoard() {
   g.fillText('RECIPES', -2, 0);
   g.restore();
   const cols = 4, cw = 212, ch = 240, gx = (w - cols * cw) / (cols + 1);
-  RECIPES.forEach((rec, i) => {
+  lv.recipes.forEach((rec, i) => {
     const known = recipeKnown(rec), col = i % cols, row = Math.floor(i / cols);
     const x = gx + col * (cw + gx), y = 160 + row * (ch + 30);
     g.save();
@@ -930,6 +1068,35 @@ function drawBoard() {
     g.restore();
   });
   TEX.board.needsUpdate = true;
+}
+// The restaurant's framed menu: mains and desserts with prices, gold on deep green
+function drawMenuBoard(lv) {
+  const c = TEX.menuCanvas, g = c.getContext('2d'), w = c.width, h = c.height;
+  g.fillStyle = '#23372C'; g.fillRect(0, 0, w, h);
+  g.strokeStyle = '#D9B25A'; g.lineWidth = 10; g.strokeRect(26, 26, w - 52, h - 52);
+  g.lineWidth = 3; g.strokeRect(44, 44, w - 88, h - 88);
+  g.fillStyle = '#E8C876'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = 'italic 700 86px Georgia, "Times New Roman", serif';
+  g.fillText('Menu', w / 2, 128);
+  g.font = '500 30px Fredoka, sans-serif';
+  g.fillText('~ Maison Hillside ~', w / 2, 192);
+  let y = 270;
+  for (const [title, station] of [['Mains', 'stove'], ['Desserts', 'oven']]) {
+    g.fillStyle = '#E8C876'; g.font = '700 40px Fredoka, sans-serif'; g.textAlign = 'center';
+    g.fillText(title.toUpperCase(), w / 2, y);
+    g.fillRect(w / 2 - 120, y + 30, 240, 3);
+    y += 84;
+    for (const rec of lv.recipes.filter((r) => r.station === station)) {
+      const known = recipeKnown(rec);
+      g.fillStyle = known ? '#F6EEDC' : 'rgba(246, 238, 220, 0.35)';
+      g.font = '500 36px Fredoka, sans-serif';
+      g.textAlign = 'left'; g.fillText(ITEMS[rec.sells].name, 110, y);
+      g.textAlign = 'right'; g.fillText(known ? String(Math.round(rec.price * (has('star') ? 1.25 : 1))) : '—', w - 110, y);
+      y += 62;
+    }
+    y += 40;
+  }
+  TEX.menuTex.needsUpdate = true;
 }
 
 /* =====================================================================
@@ -1086,6 +1253,30 @@ function initModels() {
   GEO.swirl2 = new THREE.TorusGeometry(0.065, 0.045, 10, 20).rotateX(Math.PI / 2);
   GEO.swirl3 = new THREE.SphereGeometry(0.05, 12, 10);
   GEO.cherry = new THREE.SphereGeometry(0.04, 12, 10);
+  // restaurant ingredients + dishes
+  GEO.spaghetti = new THREE.CylinderGeometry(0.075, 0.075, 0.44, 16).rotateZ(Math.PI / 2);
+  GEO.ribbon = new THREE.TorusGeometry(0.078, 0.018, 6, 18).rotateY(Math.PI / 2);
+  GEO.tomato = new THREE.SphereGeometry(0.14, 20, 14).scale(1, 0.84, 1);
+  GEO.bigLeaf = new THREE.SphereGeometry(0.06, 10, 6).scale(1.9, 0.3, 1.0);
+  GEO.steakRaw = rbox(0.34, 0.09, 0.24, 0.04);
+  GEO.fatCap = rbox(0.34, 0.095, 0.05, 0.02);
+  GEO.potato = new THREE.SphereGeometry(0.12, 16, 12).scale(1.3, 0.85, 0.95);
+  GEO.jug = lathe([[0, 0], [0.09, 0], [0.11, 0.05], [0.11, 0.17], [0.085, 0.22], [0.1, 0.26], [0.085, 0.26], [0, 0.25]], 22).translate(0, -0.13, 0);
+  GEO.jugHandle = new THREE.TorusGeometry(0.06, 0.015, 6, 12, Math.PI * 1.2);
+  GEO.fillet = rbox(0.38, 0.075, 0.18, 0.035);
+  GEO.filletLine = rbox(0.015, 0.078, 0.16, 0.006);
+  GEO.lemon = new THREE.SphereGeometry(0.11, 18, 12).scale(1.35, 1, 1);
+  GEO.lemonTip = new THREE.SphereGeometry(0.03, 8, 6);
+  GEO.plate = lathe([[0, 0], [0.2, 0], [0.3, 0.035], [0.34, 0.055], [0.31, 0.06], [0.2, 0.025], [0, 0.025]], 36);
+  GEO.noodle = new THREE.TorusGeometry(0.1, 0.028, 8, 22);
+  GEO.sauce = new THREE.SphereGeometry(0.09, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.5, 1);
+  GEO.fry = rbox(0.035, 0.035, 0.2, 0.01);
+  GEO.grill = rbox(0.02, 0.012, 0.2, 0.005);
+  GEO.lemonSlice = new THREE.CylinderGeometry(0.06, 0.06, 0.015, 16);
+  GEO.ramekin = lathe([[0, 0], [0.15, 0], [0.16, 0.14], [0.14, 0.14], [0.135, 0.02], [0, 0.02]], 26);
+  GEO.custard = new THREE.CylinderGeometry(0.136, 0.136, 0.03, 26);
+  GEO.puff = new THREE.SphereGeometry(0.15, 22, 12, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.95, 1);
+  GEO.meringue = lathe([[0, 0], [0.2, 0], [0.23, 0.04], [0.22, 0.09], [0.19, 0.11], [0.17, 0.08], [0, 0.08]], 12);
   GEO.coin = new THREE.CylinderGeometry(0.11, 0.11, 0.035, 20);
   GEO.coinFace = new THREE.CylinderGeometry(0.068, 0.068, 0.04, 16);
 }
@@ -1117,6 +1308,15 @@ function addBerry(parent, s = 1, x = 0, y = 0, z = 0) {
   parent.add(b);
   return b;
 }
+// Restaurant mains are served on a gold-rimmed plate; the plate hides while the food is in a pan
+function plated() {
+  const g = new THREE.Group();
+  const p = mesh(GEO.plate, toon(0xFFFDF8)); p.position.y = -0.07; p.userData.plate = true; g.add(p);
+  const rim = mesh(new THREE.TorusGeometry(0.32, 0.008, 4, 36).rotateX(Math.PI / 2), toon(0xD9B25A), { outline: false });
+  rim.position.y = -0.012; rim.userData.plate = true; g.add(rim);
+  return g;
+}
+function showPlate(it, on) { it.mesh.traverse((o) => { if (o.userData.plate) o.visible = on; }); }
 const CHIPS = [[0.07, 0.05], [-0.08, 0.07], [0.02, -0.09], [-0.11, -0.04], [0.12, -0.05], [-0.02, 0.13], [0.0, 0.0]];
 
 // Each builder returns { g: group, shape: physics shape (unscaled), rest: half-height when upright }
@@ -1311,6 +1511,109 @@ const MODELS = {
     }
     return { g, shape: { t: 'cyl', r: 0.27, h: 0.12 }, rest: 0.06 };
   },
+  pasta() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.spaghetti, toon(0xF3D38A)));
+    g.add(mesh(GEO.ribbon, toon(0xD9412F), { outline: 'thin' }));
+    return { g, shape: { t: 'box', h: [0.22, 0.075, 0.075] }, rest: 0.075 };
+  },
+  tomato() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.tomato, toon(0xE8473B)));
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const l = mesh(GEO.leaf, MAT.leaf, { outline: 'thin' }); l.position.set(Math.cos(a) * 0.04, 0.11, Math.sin(a) * 0.04); l.rotation.set(0, -a, -0.2); g.add(l);
+    }
+    return { g, shape: { t: 'sphere', r: 0.13 }, rest: 0.12 };
+  },
+  herbs() {
+    const g = new THREE.Group();
+    const st = mesh(GEO.stem, MAT.leaf, { outline: 'thin' }); st.rotation.z = Math.PI / 2; st.scale.set(1, 3.5, 1); g.add(st);
+    [[-0.1, 0.3], [-0.03, -0.5], [0.04, 0.6], [0.1, -0.3], [0.15, 0.1]].forEach(([x, a]) => {
+      const l = mesh(GEO.bigLeaf, toon(0x5FAE45), { outline: 'thin' }); l.position.set(x, 0.01, 0); l.rotation.y = a; g.add(l);
+    });
+    return { g, shape: { t: 'box', h: [0.16, 0.035, 0.09] }, rest: 0.035 };
+  },
+  beef() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.steakRaw, toon(0xD9534F)));
+    const f = mesh(GEO.fatCap, toon(0xFBE7DA), { outline: 'thin' }); f.position.z = -0.1; g.add(f);
+    return { g, shape: { t: 'box', h: [0.17, 0.047, 0.12] }, rest: 0.047 };
+  },
+  potato() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.potato, toon(0xC9A06A)));
+    for (const [x, y, z] of [[0.06, 0.07, 0.05], [-0.08, 0.04, 0.07], [0.02, 0.02, -0.1]]) {
+      const d = new THREE.Mesh(GEO.eye, toon(0x8A6A44)); d.position.set(x, y, z); g.add(d);
+    }
+    return { g, shape: { t: 'sphere', r: 0.12 }, rest: 0.1 };
+  },
+  cream() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.jug, toon(0xFFFBF2)));
+    const h = mesh(GEO.jugHandle, toon(0xFFFBF2), { outline: 'thin' }); h.position.set(-0.11, 0.0, 0); h.rotation.z = Math.PI / 2 + 0.3; g.add(h);
+    const band = mesh(GEO.jarBand, toon(0x8FB8DE), { outline: 'thin' }); band.scale.set(0.77, 0.5, 0.77); band.position.y = -0.03; g.add(band);
+    return { g, shape: { t: 'box', h: [0.11, 0.13, 0.11] }, rest: 0.13 };
+  },
+  fish() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.fillet, toon(0xF4906A)));
+    for (const x of [-0.1, 0, 0.1]) { const l = new THREE.Mesh(GEO.filletLine, toon(0xFFE3D6)); l.position.x = x; l.rotation.y = 0.35; g.add(l); }
+    return { g, shape: { t: 'box', h: [0.19, 0.04, 0.09] }, rest: 0.04 };
+  },
+  lemon() {
+    const g = new THREE.Group();
+    g.add(mesh(GEO.lemon, toon(0xF6D43B)));
+    for (const x of [-0.15, 0.15]) { const t = mesh(GEO.lemonTip, toon(0xF6D43B), { outline: 'thin' }); t.position.x = x; g.add(t); }
+    return { g, shape: { t: 'box', h: [0.16, 0.11, 0.11] }, rest: 0.11 };
+  },
+  pastaDish() {
+    const g = plated();
+    const m = bakeMat(0xF7E7C0, 0xF2C66A);
+    [[0, 0.03, 0, 0], [0.03, 0.06, 0.02, 0.8], [-0.03, 0.08, -0.01, 1.7], [0, 0.11, 0.01, 2.4]].forEach(([x, y, z, r]) => {
+      const n = mesh(GEO.noodle, m, { outline: 'thin' }); n.position.set(x, y, z); n.rotation.set(Math.PI / 2 + 0.3 * Math.sin(r), r, 0); g.add(n);
+    });
+    const sc = mesh(GEO.sauce, fixedMat(0xD9412F), { outline: 'thin' }); sc.position.y = 0.12; sc.userData.topping = true; g.add(sc);
+    const b = mesh(GEO.bigLeaf, fixedMat(0x5FAE45), { outline: 'thin' }); b.position.set(0.03, 0.165, 0.02); b.rotation.y = 0.6; b.userData.topping = true; g.add(b);
+    return { g, shape: { t: 'cyl', r: 0.34, h: 0.2 }, rest: 0.07 };
+  },
+  steak() {
+    const g = plated();
+    const st = mesh(GEO.steakRaw, bakeMat(0xD9534F, 0x8A4A2A)); st.position.set(-0.06, 0.07, 0); st.scale.set(0.9, 0.9, 0.9); g.add(st);
+    for (const x of [-0.14, -0.06, 0.02]) { const gm = mesh(GEO.grill, fixedMat(0x4A2A18), { outline: false }); gm.position.set(x, 0.113, 0); gm.rotation.y = 0.5; gm.userData.topping = true; g.add(gm); }
+    const fm = bakeMat(0xF8E6B0, 0xF2B544);
+    for (let i = 0; i < 5; i++) { const f = mesh(GEO.fry, fm, { outline: 'thin' }); f.position.set(0.17 + (i % 2) * 0.03, 0.05 + i * 0.012, -0.08 + i * 0.04); f.rotation.y = 0.3 * i - 0.4; g.add(f); }
+    return { g, shape: { t: 'cyl', r: 0.34, h: 0.2 }, rest: 0.07 };
+  },
+  salmon() {
+    const g = plated();
+    const f = mesh(GEO.fillet, bakeMat(0xF4906A, 0xE07A4A)); f.position.set(-0.03, 0.065, 0); g.add(f);
+    const ls = mesh(GEO.lemonSlice, fixedMat(0xF6D43B), { outline: 'thin' }); ls.position.set(0.02, 0.11, 0.02); ls.userData.topping = true; g.add(ls);
+    for (const [x, z, a] of [[0.2, 0.08, 0.3], [0.22, -0.07, -0.6]]) { const l = mesh(GEO.bigLeaf, toon(0x5FAE45), { outline: 'thin' }); l.position.set(x, 0.05, z); l.rotation.y = a; g.add(l); }
+    return { g, shape: { t: 'cyl', r: 0.34, h: 0.2 }, rest: 0.07 };
+  },
+  brulee() {
+    const g = new THREE.Group();
+    const r = mesh(GEO.ramekin, toon(0xFFFDF8)); r.position.y = -0.07; g.add(r);
+    const c = mesh(GEO.custard, bakeMat(0xFFF1C4, 0xE0983A), { outline: false }); c.position.y = 0.04; g.add(c);
+    return { g, shape: { t: 'cyl', r: 0.16, h: 0.15 }, rest: 0.075 };
+  },
+  souffle() {
+    const g = new THREE.Group();
+    const r = mesh(GEO.ramekin, toon(0xFFFDF8)); r.position.y = -0.07; g.add(r);
+    const pf = mesh(GEO.puff, bakeMat(0xFBEBC4, 0xE6B45A)); pf.position.y = 0.06; g.add(pf);
+    for (const [x, z] of [[0.04, 0.03], [-0.05, 0.02], [0.0, -0.06]]) { const d = new THREE.Mesh(GEO.berryDot, toon(0xFFFFFF)); d.scale.setScalar(0.5); d.position.set(x, 0.2, z); d.userData.topping = true; g.add(d); }
+    return { g, shape: { t: 'cyl', r: 0.16, h: 0.3 }, rest: 0.075 };
+  },
+  pavlova() {
+    const g = new THREE.Group();
+    const pl = mesh(GEO.plate, toon(0xFFFDF8)); pl.scale.setScalar(0.85); pl.position.y = -0.07; g.add(pl);
+    const m = mesh(GEO.meringue, bakeMat(0xFFFBF2, 0xF3DDB0)); m.position.y = -0.045; g.add(m);
+    const cr = mesh(GEO.swirl1, fixedMat(0xFFFDF5), { outline: 'thin' }); cr.scale.set(1.3, 1, 1.3); cr.position.y = 0.06; cr.userData.topping = true; g.add(cr);
+    const b1 = addBerry(g, 0.7, 0.03, 0.12, 0.02); b1.userData.topping = true;
+    const b2 = addBerry(g, 0.6, -0.07, 0.1, -0.05); b2.rotation.z = 0.6; b2.userData.topping = true;
+    return { g, shape: { t: 'cyl', r: 0.28, h: 0.2 }, rest: 0.07 };
+  },
   coin() {
     const g = new THREE.Group();
     g.add(mesh(GEO.coin, toon(0xF6C744), { outline: 'thin' }));
@@ -1322,14 +1625,20 @@ const MODELS = {
 /* =====================================================================
    Physics world
    ===================================================================== */
-const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -18, 0), allowSleep: true });
-world.broadphase = new CANNON.SAPBroadphase(world);
-world.solver.iterations = 12;
-world.defaultContactMaterial.friction = 0.45;
-world.defaultContactMaterial.restitution = 0.15;
+// Each level (bakery, restaurant) has its own physics world; only the active one is stepped.
 const PM = { item: new CANNON.Material('item'), stat: new CANNON.Material('static') };
-world.addContactMaterial(new CANNON.ContactMaterial(PM.item, PM.stat, { friction: 0.5, restitution: 0.22 }));
-world.addContactMaterial(new CANNON.ContactMaterial(PM.item, PM.item, { friction: 0.55, restitution: 0.12 }));
+function makeWorld() {
+  const w = new CANNON.World({ gravity: new CANNON.Vec3(0, -18, 0), allowSleep: true });
+  w.broadphase = new CANNON.SAPBroadphase(w);
+  w.solver.iterations = 12;
+  w.defaultContactMaterial.friction = 0.45;
+  w.defaultContactMaterial.restitution = 0.15;
+  w.addContactMaterial(new CANNON.ContactMaterial(PM.item, PM.stat, { friction: 0.5, restitution: 0.22 }));
+  w.addContactMaterial(new CANNON.ContactMaterial(PM.item, PM.item, { friction: 0.55, restitution: 0.12 }));
+  w.addEventListener('preStep', holdStep);
+  return w;
+}
+let world = null;
 
 const GRP = { STATIC: 1, ITEM: 2, HELD: 4, BOUND: 8, CUST: 16, COIN: 32 };
 const MASK = {
@@ -1360,9 +1669,9 @@ function colCompound(x, y, z, parts) {
 /* =====================================================================
    Drop zones (oven, bowl, bin, customers)
    ===================================================================== */
-const zones = [];
+let zones = [];
 const HIDDEN = new THREE.MeshBasicMaterial({ visible: false });
-function makeZone(geo, x, y, z, def, parent = scene) {
+function makeZone(geo, x, y, z, def, parent = ROOT) {
   const m = new THREE.Mesh(geo, HIDDEN);
   m.position.set(x, y, z);
   m.userData.zone = def;
@@ -1376,10 +1685,8 @@ function makeZone(geo, x, y, z, def, parent = scene) {
    The bakery interior
    ===================================================================== */
 const WAIN_H = 1.3, WALL_H = 4.2, COUNTER_H = 0.82;
-const OVEN = { zc: -2.4, front: -3.74, slots: [] };
-const BOWL = { pos: new THREE.Vector3(-2.1, 1.0, 1.45), contents: [], mixing: 0, sig: '' };
-const TRASH = { pos: new THREE.Vector3(-0.35, 0, 3.75) };
-const DOOR = { x: 4.4, angle: 0 };
+// Shared station handles; they point at the active level's stations (see bindLevel)
+let OVEN = null, BOWL = null, TRASH = null, DOOR = null;
 const DECOR = {};
 const CLOCK = {};
 const CAT = { t: 0 };
@@ -1401,18 +1708,19 @@ const SOURCES = [
   { key: 'honey',      pos: [-5.17, 2.9, 2.5] },
 ];
 
-function wallPiece(cx, cz, sx, sz, y0, y1) {
+function wallPiece(cx, cz, sx, sz, y0, y1, style) {
+  const st = style || { wain: TEX.wain, wall: TEX.wall, rail: 0xFFF0D2 };
   const long = Math.max(sx, sz), alongX = sx > sz;
   if (y0 < WAIN_H) {
     const h = Math.min(y1, WAIN_H) - y0;
-    P(rbox(sx, h, sz, 0.02), texMat(TEX.wain, long / 1.1, 1), cx, y0 + h / 2, cz, { cast: false });
+    P(rbox(sx, h, sz, 0.02), texMat(st.wain, long / 1.1, 1), cx, y0 + h / 2, cz, { cast: false });
   }
   if (y1 > WAIN_H) {
     const b = Math.max(y0, WAIN_H), h = y1 - b;
-    P(rbox(sx, h, sz, 0.02), texMat(TEX.wall, long / 2.2, h / 2.2), cx, b + h / 2, cz, { cast: false });
+    P(rbox(sx, h, sz, 0.02), texMat(st.wall, long / 2.2, h / 2.2), cx, b + h / 2, cz, { cast: false });
   }
   if (y0 < WAIN_H && y1 > WAIN_H) {
-    P(rbox(alongX ? sx : sx + 0.14, 0.13, alongX ? sz + 0.14 : sz, 0.04), 0xFFF0D2,
+    P(rbox(alongX ? sx : sx + 0.14, 0.13, alongX ? sz + 0.14 : sz, 0.04), st.rail,
       cx + (alongX ? 0 : 0.07), WAIN_H, cz + (alongX ? 0.07 : 0), { cast: false });
   }
   colBox(cx, (y0 + y1) / 2, cz, sx / 2, (y1 - y0) / 2, sz / 2);
@@ -1423,11 +1731,11 @@ function glow(pos, size = 1, opacity = 0.4) {
   const m = new THREE.SpriteMaterial({ map: TEX.puff, color: 0xFFC76B, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
   const sp = new THREE.Sprite(m);
   sp.position.copy(pos); sp.scale.setScalar(size); sp.renderOrder = 8;
-  scene.add(sp);
+  ROOT.add(sp);
   return sp;
 }
 // A row of little flowers (window box, vase)
-function flowers(x, y, z, width, n, parent = scene) {
+function flowers(x, y, z, width, n, parent = ROOT) {
   const cols = [0xFF8FA3, 0xFFD166, 0xFFFFFF, 0xF79A5B, 0xC7A3F0];
   for (let i = 0; i < n; i++) {
     const fx = x - width / 2 + (width * (i + 0.5)) / n, h = 0.12 + (i % 3) * 0.05;
@@ -1448,13 +1756,13 @@ function fairyLights([a, b]) {
   };
   for (let i = 0; i <= spans * 12; i++) pts.push(at(i / (spans * 12)));
   const wire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), spans * 24, 0.008, 4), MAT.eye);
-  scene.add(wire);
+  ROOT.add(wire);
   const nb = Math.round(len / 0.42);
   for (let i = 1; i < nb; i++) {
     const p = at(i / nb);
     const bulb = new THREE.Mesh(FAIRY.bulb, FAIRY.mats[i % 3]);
     bulb.position.set(p.x, p.y - 0.05, p.z);
-    scene.add(bulb);
+    ROOT.add(bulb);
   }
 }
 function updateFairy() {
@@ -1468,7 +1776,7 @@ function buildShell() {
   const slabMat = texMat(TEX.slab, 6, 1);
   const slab = mesh(new THREE.BoxGeometry(11.8, 0.5, 9.8), [slabMat, slabMat, floorMat, slabMat, slabMat, slabMat], { cast: false });
   slab.position.set(0, -0.25, 0);
-  scene.add(slab);
+  ROOT.add(slab);
   colBox(0, -0.25, 0, 5.9, 0.25, 4.9);
 
   // walls (left wall runs along z, right wall along x with a door gap)
@@ -1491,14 +1799,14 @@ function buildShell() {
   // doorway, outside view and the door on its hinge
   const outside = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.9), new THREE.MeshBasicMaterial({ map: TEX.view }));
   outside.position.set(DOOR.x, 1.35, -5.5);
-  scene.add(outside);
+  ROOT.add(outside);
   P(rbox(1.5, 0.12, 0.9, 0.03), 0xD9C7A8, DOOR.x, -0.05, -5.25, { cast: false });
   P(rbox(0.14, 2.64, 0.52, 0.04), 0xB9723E, 3.73, 1.32, -4.68);
   P(rbox(0.14, 2.64, 0.52, 0.04), 0xB9723E, 5.07, 1.32, -4.68);
   P(rbox(1.5, 0.16, 0.52, 0.04), 0xB9723E, DOOR.x, 2.58, -4.68);
   DOOR.pivot = new THREE.Group();
   DOOR.pivot.position.set(5.0, 0, -4.62);
-  scene.add(DOOR.pivot);
+  ROOT.add(DOOR.pivot);
   P(rbox(1.2, 2.46, 0.09, 0.03), 0xA7663B, -0.6, 1.24, 0, { parent: DOOR.pivot });
   P(rbox(0.86, 0.86, 0.1, 0.03), 0x94582F, -0.6, 0.62, 0.012, { parent: DOOR.pivot, outline: 'thin' });
   P(new THREE.CylinderGeometry(0.24, 0.24, 0.11, 24), 0xCFE9F2, -0.6, 1.72, 0, { parent: DOOR.pivot, rx: Math.PI / 2 });
@@ -1509,14 +1817,14 @@ function buildShell() {
   // bell over the door (upgrade)
   DECOR.bell = new THREE.Group();
   DECOR.bell.position.set(DOOR.x, 2.95, -4.36);
-  scene.add(DECOR.bell);
+  ROOT.add(DECOR.bell);
   P(rbox(0.06, 0.26, 0.06, 0.02), 0x8A5A3B, 0, 0.12, -0.08, { parent: DECOR.bell, outline: 'thin' });
   DECOR.bellCup = P(lathe([[0, -0.2], [0.14, -0.2], [0.13, -0.16], [0.09, -0.06], [0.06, 0.02], [0, 0.03]], 18), 0xF3C04E, 0, 0, 0, { parent: DECOR.bell });
 
   // recipe board (corkboard with pinned cards; click it to read the recipes)
   BOARD.g = new THREE.Group();
   BOARD.g.position.set(-3.5, 2.7, -4.44);
-  scene.add(BOARD.g);
+  ROOT.add(BOARD.g);
   P(rbox(2.42, 2.42, 0.12, 0.05), 0x8A5A3B, 0, 0, 0, { parent: BOARD.g, cast: false });
   const cork = new THREE.Mesh(new THREE.PlaneGeometry(2.24, 2.24), new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.board }));
   cork.position.z = 0.065;
@@ -1529,7 +1837,7 @@ function buildShell() {
   P(rbox(1.8, 1.6, 0.14, 0.06), 0xFFF6E6, wx, wy, wz, { cast: false });
   const pane = new THREE.Mesh(new THREE.PlaneGeometry(1.52, 1.32), new THREE.MeshBasicMaterial({ map: TEX.view }));
   pane.position.set(wx, wy, wz + 0.075);
-  scene.add(pane);
+  ROOT.add(pane);
   P(rbox(0.07, 1.34, 0.06, 0.02), 0xFFF6E6, wx, wy, wz + 0.1, { outline: 'thin', cast: false });
   P(rbox(1.54, 0.07, 0.06, 0.02), 0xFFF6E6, wx, wy + 0.1, wz + 0.1, { outline: 'thin', cast: false });
   P(rbox(2.0, 0.1, 0.34, 0.04), 0xE9B27A, wx, wy - 0.82, wz + 0.12);
@@ -1550,13 +1858,13 @@ function buildShell() {
     P(new THREE.ConeGeometry(0.2, 0.22, 18), 0xF0A04B, lx, 3.08, -4.18, { cast: false });
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), new THREE.MeshBasicMaterial({ color: 0xFFE9A8 }));
     bulb.position.set(lx, 2.94, -4.18);
-    scene.add(bulb);
+    ROOT.add(bulb);
     glow(bulb.position, 1.1, 0.45);
   }
 
   // clock above the door
   const cl = new THREE.Group();
-  cl.position.set(DOOR.x, 3.62, -4.42); cl.scale.setScalar(0.78); scene.add(cl);
+  cl.position.set(DOOR.x, 3.62, -4.42); cl.scale.setScalar(0.78); ROOT.add(cl);
   P(new THREE.CylinderGeometry(0.4, 0.4, 0.1, 32), 0xE38F45, 0, 0, 0, { parent: cl, rx: Math.PI / 2, cast: false });
   const cf = new THREE.Mesh(new THREE.CircleGeometry(0.33, 32), new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.clock }));
   cf.position.z = 0.056; cl.add(cf);
@@ -1602,7 +1910,7 @@ function buildOven() {
   OVEN.glowMat = new THREE.MeshBasicMaterial({ map: TEX.glow, color: 0x9A7A66 });
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.7), OVEN.glowMat);
   glow.rotation.y = Math.PI / 2; glow.position.set(front - 1.25, 1.8, zc);
-  scene.add(glow);
+  ROOT.add(glow);
   P(rbox(0.95, 0.05, 2.02, 0.02), 0x6B5A4E, front - 0.5, 1.02, zc, { outline: 'thin' });
   for (const [ly, lz] of [[0.26, -0.17], [0.26, 0.17], [0.44, 0]]) {
     P(new THREE.CylinderGeometry(0.09, 0.09, 0.55, 12), 0x8B5A33, front - 0.4, ly, zc + lz, { rz: Math.PI / 2, outline: 'thin' });
@@ -1611,7 +1919,7 @@ function buildOven() {
   // cute face
   OVEN.face = new THREE.Group();
   OVEN.face.position.set(front + 0.012, 2.86, zc); OVEN.face.rotation.y = Math.PI / 2;
-  scene.add(OVEN.face);
+  ROOT.add(OVEN.face);
   OVEN.eyeOpen = new THREE.Group(); OVEN.eyeHappy = new THREE.Group();
   const eg = new THREE.SphereGeometry(0.085, 14, 10).scale(1, 1.3, 0.35);
   const hg = new THREE.TorusGeometry(0.08, 0.024, 6, 14, Math.PI);
@@ -1630,7 +1938,7 @@ function buildOven() {
 
   OVEN.light = new THREE.PointLight(0xFF9A3C, 0, 4.5, 1.6);
   OVEN.light.position.set(front - 0.5, 1.8, zc);
-  scene.add(OVEN.light);
+  ROOT.add(OVEN.light);
 
   OVEN.slots = [-0.72, -0.05, 0.62].map((dz) => ({ oven: true, pos: new THREE.Vector3(front - 0.42, 1.045, zc + dz), item: null, ring: null }));
 
@@ -1759,47 +2067,50 @@ function tagTex(text) {
     g.fillText(text, w / 2, h / 2 + 2, w - 24);
   });
 }
-function buildPantry() {
-  const x = -5.0, { z0, z1, cols, shelves } = PANTRY, zc = (z0 + z1) / 2, len = z1 - z0;
-  const wood = 0xC27A43, light = 0xEBC690, dark = 0xA86B3F;
+const PANTRY_WOOD = { wood: 0xC27A43, light: 0xEBC690, dark: 0xA86B3F, drawer: 0xD89357, knob: 0xF6D38A, back: 0xE8B887, crown: 0xE08E45, sc: [0xFFF4DC, 0xF6C85E] };
+function buildPantry(cfg = PANTRY, list = SOURCES, pal = PANTRY_WOOD, spare = true) {
+  const x = -5.0, { z0, z1, cols, shelves } = cfg, zc = (z0 + z1) / 2, len = z1 - z0;
+  const { wood, light, dark } = pal;
   // base cabinet with drawers
   P(rbox(1.0, 0.9, len, 0.05), wood, x, 0.45, zc);
   P(rbox(1.14, 0.12, len + 0.12, 0.05), light, x + 0.04, 0.94, zc);
   for (const dz of cols) for (const y of [0.64, 0.26]) {
-    P(rbox(0.06, 0.3, len / 4 - 0.16, 0.03), 0xD89357, -4.48, y, dz, { outline: 'thin' });
-    P(new THREE.SphereGeometry(0.045, 10, 8), 0xF6D38A, -4.44, y - 0.07, dz, { outline: 'thin' });
+    P(rbox(0.06, 0.3, len / 4 - 0.16, 0.03), pal.drawer, -4.48, y, dz, { outline: 'thin' });
+    P(new THREE.SphereGeometry(0.045, 10, 8), pal.knob, -4.44, y - 0.07, dz, { outline: 'thin' });
   }
   colBox(x + 0.04, 0.5, zc, 0.57, 0.5, len / 2 + 0.06);
   // hutch: back panel, side posts, two shelves with lips, cubby dividers, crown
-  P(rbox(0.06, 2.8, len, 0.02), 0xE8B887, -5.47, 2.4, zc, { cast: false });
+  P(rbox(0.06, 2.8, len, 0.02), pal.back, -5.47, 2.4, zc, { cast: false });
   for (const z of [z0 + 0.05, z1 - 0.05]) P(rbox(0.66, 2.85, 0.1, 0.03), wood, -5.17, 2.42, z);
   for (const y of shelves) {
     P(rbox(0.64, 0.08, len - 0.1, 0.02), light, -5.17, y - 0.04, zc);
     P(rbox(0.05, 0.14, len - 0.1, 0.02), dark, -4.85, y - 0.05, zc, { outline: 'thin' });
     colBox(-5.17, y - 0.04, zc, 0.33, 0.04, len / 2);
-    for (const dz of [0.55, 1.85, 3.15]) P(rbox(0.6, 0.86, 0.05, 0.02), dark, -5.2, y + 0.43, dz, { outline: 'thin', cast: false });
+    for (let i = 1; i < cols.length; i++) P(rbox(0.6, 0.86, 0.05, 0.02), dark, -5.2, y + 0.43, (cols[i - 1] + cols[i]) / 2, { outline: 'thin', cast: false });
   }
-  P(rbox(0.82, 0.16, len + 0.24, 0.05), 0xE08E45, -5.12, 3.86, zc);
+  P(rbox(0.82, 0.16, len + 0.24, 0.05), pal.crown, -5.12, 3.86, zc);
   const sc = new THREE.ExtrudeGeometry(new THREE.Shape().absarc(0, 0, 0.13, Math.PI, Math.PI * 2, false), { depth: 0.03, bevelEnabled: false });
   const n = 16;
   for (let i = 0; i < n; i++) {
-    const s = P(sc, i % 2 ? 0xFFF4DC : 0xF6C85E, -4.72, 3.78, z0 + (len * (i + 0.5)) / n, { outline: 'thin', cast: false });
+    const s = P(sc, pal.sc[i % 2], -4.72, 3.78, z0 + (len * (i + 0.5)) / n, { outline: 'thin', cast: false });
     s.rotation.y = Math.PI / 2;
   }
   // cookbooks and a little plant in the spare cubby
-  const bz = cols[3], by = shelves[1];
-  [[0xE0584C, 0.36], [0x5577B5, 0.32], [0x74B35A, 0.34]].forEach(([c, h], i) => {
-    const b = P(rbox(0.36, h, 0.09, 0.02), c, -5.2, by + h / 2, bz - 0.35 + i * 0.1); b.rotation.x = i === 2 ? -0.15 : 0;
-  });
-  plant(-5.18, by, bz + 0.2, 0.6);
+  if (spare) {
+    const bz = cols[3], by = shelves[1];
+    [[0xE0584C, 0.36], [0x5577B5, 0.32], [0x74B35A, 0.34]].forEach(([c, h], i) => {
+      const b = P(rbox(0.36, h, 0.09, 0.02), c, -5.2, by + h / 2, bz - 0.35 + i * 0.1); b.rotation.x = i === 2 ? -0.15 : 0;
+    });
+    plant(-5.18, by, bz + 0.2, 0.6);
+  }
   // name tags: on the drawers for the counter row, on the shelf lips above
-  for (const src of SOURCES) {
+  for (const src of list) {
     const [sx, sy, sz] = src.pos;
     const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.125), new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: tagTex(ITEMS[src.key].name.toUpperCase()) }));
     tag.rotation.y = Math.PI / 2;
     if (sy < 1.5) tag.position.set(-4.443, 0.71, sz);
     else tag.position.set(-4.822, sy - 0.05, sz);
-    scene.add(tag);
+    ROOT.add(tag);
   }
 }
 
@@ -1819,11 +2130,11 @@ function buildTable() {
   colBox(x, 0.5, z, 1.3, 0.5, 1.25);
 }
 
-function buildBowl() {
+function buildBowl(band = 0x6E9BD6) {
   const { x, y, z } = BOWL.pos;
   BOWL.mesh = P(lathe([[0, 0], [0.5, 0], [0.62, 0.03], [0.78, 0.16], [0.88, 0.36], [0.92, 0.48], [0.9, 0.52], [0.84, 0.5],
     [0.8, 0.42], [0.7, 0.22], [0.5, 0.08], [0, 0.07]], 44), 0xFFF8EC, x, y, z);
-  P(new THREE.TorusGeometry(0.855, 0.03, 8, 48), 0x6E9BD6, x, y + 0.3, z, { rx: Math.PI / 2, outline: 'thin' });
+  P(new THREE.TorusGeometry(0.855, 0.03, 8, 48), band, x, y + 0.3, z, { rx: Math.PI / 2, outline: 'thin' });
   BOWL.mesh.userData.action = 'mix';
   addPickable(BOWL.mesh);
   const parts = [[new CANNON.Cylinder(0.62, 0.62, 0.1, 16), [0, 0.04, 0]]];
@@ -1843,7 +2154,7 @@ function buildBowl() {
   }
   BOWL.whisk.position.set(x, y + 0.15, z);
   BOWL.whisk.visible = false;
-  scene.add(BOWL.whisk);
+  ROOT.add(BOWL.whisk);
 }
 
 // Sales counter: plain wooden ends with a glass treat case in the middle, in front of the customers
@@ -1867,7 +2178,7 @@ function buildCounter() {
 
 function buildDisplay() {
   const { x0, x1, z, bed, shelf, top } = CASE, cx = (x0 + x1) / 2, L = x1 - x0, D = 0.9;
-  CASE.g = new THREE.Group(); scene.add(CASE.g);
+  CASE.g = new THREE.Group(); ROOT.add(CASE.g);
   const glass = new THREE.MeshBasicMaterial({ color: 0xDDF2F6, transparent: true, opacity: 0.2, depthWrite: false });
   const glassMesh = (geo, x, y, zz) => { const m = new THREE.Mesh(geo, glass); m.position.set(x, y, zz); m.renderOrder = 7; CASE.g.add(m); return m; };
   const wood = 0xB36E3C, trim = 0xF2D29E;
@@ -1908,7 +2219,7 @@ function buildDisplay() {
   });
   const sg = new THREE.Group();
   sg.position.set(x1 - 0.3, top + 0.02, z + 0.2); sg.rotation.set(-0.2, 0.3, 0);
-  scene.add(sg);
+  ROOT.add(sg);
   P(rbox(0.5, 0.36, 0.04, 0.02), 0x8A5A3B, 0, 0.2, 0, { parent: sg });
   const chalkFace = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.29), new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: chalk }));
   chalkFace.position.set(0, 0.2, 0.025);
@@ -1924,13 +2235,13 @@ function buildDisplay() {
     b.scale.setScalar(1.05);
     b.position.set(bx + dx, 0.55, bz + dz);
     b.rotation.set(tx, 0, Math.PI / 2 + tz);
-    scene.add(b);
+    ROOT.add(b);
   }
   colBox(bx, 0.35, bz, 0.3, 0.35, 0.3);
 
   // striped trim on the case (upgrade)
   const aw = new THREE.Group();
-  scene.add(aw);
+  ROOT.add(aw);
   P(rbox(L + 0.04, 0.09, 0.05, 0.02), texMat(TEX.stripes, 4, 1), cx, top - 0.09, z + D / 2 + 0.01, { parent: aw, outline: 'thin' });
   P(rbox(L - 0.2, bed - 0.1, 0.05, 0.02), texMat(TEX.stripes, 5, 1), cx, bed / 2, z + D / 2 + 0.02, { parent: aw, outline: 'thin' });
   const sc = new THREE.ExtrudeGeometry(new THREE.Shape().absarc(0, 0, 0.09, Math.PI, Math.PI * 2, false), { depth: 0.03, bevelEnabled: false });
@@ -1963,11 +2274,11 @@ function caseInsert(it) {
   return true;
 }
 
-function buildTrash() {
+function buildTrash(body = 0x8FB07E, band = 0x6F8F60) {
   const { x, z } = TRASH.pos;
   TRASH.mesh = P(lathe([[0, 0], [0.33, 0], [0.36, 0.05], [0.42, 0.78], [0.45, 0.82], [0.45, 0.86], [0.39, 0.86], [0.36, 0.8],
-    [0.3, 0.08], [0, 0.08]], 32), 0x8FB07E, x, 0, z);
-  P(new THREE.TorusGeometry(0.405, 0.03, 8, 32), 0x6F8F60, x, 0.45, z, { rx: Math.PI / 2, outline: 'thin' });
+    [0.3, 0.08], [0, 0.08]], 32), body, x, 0, z);
+  P(new THREE.TorusGeometry(0.405, 0.03, 8, 32), band, x, 0.45, z, { rx: Math.PI / 2, outline: 'thin' });
   const parts = [[new CANNON.Cylinder(0.33, 0.33, 0.08, 12), [0, 0.04, 0]]];
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
@@ -1977,11 +2288,11 @@ function buildTrash() {
   colCompound(x, 0, z, parts);
 }
 
-function plant(x, y, z, s = 1, parent = scene) {
+function plant(x, y, z, s = 1, parent = ROOT, pot = 0xD9774A) {
   const g = new THREE.Group();
   g.position.set(x, y, z); g.scale.setScalar(s);
   parent.add(g);
-  P(lathe([[0, 0], [0.2, 0], [0.26, 0.36], [0.3, 0.38], [0.3, 0.44], [0.25, 0.44], [0.22, 0.4], [0, 0.4]], 20), 0xD9774A, 0, 0, 0, { parent: g });
+  P(lathe([[0, 0], [0.2, 0], [0.26, 0.36], [0.3, 0.38], [0.3, 0.44], [0.25, 0.44], [0.22, 0.4], [0, 0.4]], 20), pot, 0, 0, 0, { parent: g });
   if (!GEO.plantLeaf) GEO.plantLeaf = new THREE.SphereGeometry(0.16, 12, 8).scale(0.55, 1.45, 0.3);
   for (let i = 0; i < 8; i++) {
     const pv = new THREE.Group();
@@ -1996,7 +2307,7 @@ function plant(x, y, z, s = 1, parent = scene) {
 
 function bunting(x0, x1, y, z) {
   const g = new THREE.Group();
-  scene.add(g);
+  ROOT.add(g);
   const tri = new THREE.Shape();
   tri.moveTo(-0.14, 0); tri.lineTo(0.14, 0); tri.lineTo(0, -0.27); tri.closePath();
   const tg = new THREE.ExtrudeGeometry(tri, { depth: 0.02, bevelEnabled: false });
@@ -2017,7 +2328,7 @@ function bunting(x0, x1, y, z) {
 
 function buildDecor() {
   // flour sacks piled in the corner
-  const pile = new THREE.Group(); pile.position.set(-3.55, 0, 4.25); scene.add(pile);
+  const pile = new THREE.Group(); pile.position.set(-3.55, 0, 4.25); ROOT.add(pile);
   for (const [dx, dz, r] of [[-0.3, 0, 0.3], [0.32, 0.08, -0.4]]) {
     const s = MODELS.flour().g; s.scale.setScalar(1.9); s.position.set(dx, 0.46, dz); s.rotation.y = r; pile.add(s);
   }
@@ -2032,7 +2343,7 @@ function buildDecor() {
   P(rbox(5.0, 0.02, 0.9, 0.01), texMat(TEX.runner, 3, 1), 2.1, 0.012, -1.2, { outline: 'thin', cast: false });
 
   // café corner: a little table for two with tea
-  const cafe = new THREE.Group(); cafe.position.set(4.6, 0, 3.75); scene.add(cafe);
+  const cafe = new THREE.Group(); cafe.position.set(4.6, 0, 3.75); ROOT.add(cafe);
   const cloth = new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.gingham });
   P(new THREE.CylinderGeometry(0.68, 0.68, 0.07, 36), [toon(0xF3D9D2), cloth, toon(0xF3D9D2)], 0, 0.8, 0, { parent: cafe });
   P(new THREE.CylinderGeometry(0.07, 0.08, 0.76, 12), 0x8A5A3B, 0, 0.39, 0, { parent: cafe });
@@ -2051,7 +2362,7 @@ function buildDecor() {
   flowers(-0.26, 0.95, -0.34, 0.14, 3, cafe);
   colCompound(4.6, 0.8, 3.75, [[new CANNON.Cylinder(0.68, 0.68, 0.07, 18), [0, 0, 0]]]);
   const chair = (x, z, ry) => {
-    const c = new THREE.Group(); c.position.set(x, 0, z); c.rotation.y = ry; scene.add(c);
+    const c = new THREE.Group(); c.position.set(x, 0, z); c.rotation.y = ry; ROOT.add(c);
     P(rbox(0.44, 0.06, 0.44, 0.02), 0xB5773F, 0, 0.46, 0, { parent: c });
     P(rbox(0.38, 0.06, 0.38, 0.03), 0xF4A6A6, 0, 0.51, 0.02, { parent: c, outline: 'thin' });
     for (const lx of [-0.18, 0.18]) for (const lz of [-0.18, 0.18]) P(rbox(0.05, 0.46, 0.05, 0.015), 0xA86B3F, lx, 0.23, lz, { parent: c, outline: 'thin' });
@@ -2064,7 +2375,7 @@ function buildDecor() {
   chair(4.95, 2.78, Math.atan2(-0.35, 0.97));
 
   // cake under a glass dome and a vase of flowers on the counter
-  const stand = new THREE.Group(); stand.position.set(-0.55, COUNTER_H, -2.45); scene.add(stand);
+  const stand = new THREE.Group(); stand.position.set(-0.55, COUNTER_H, -2.45); ROOT.add(stand);
   P(new THREE.CylinderGeometry(0.1, 0.14, 0.04, 16), 0xFFF6E6, 0, 0.02, 0, { parent: stand });
   P(new THREE.CylinderGeometry(0.035, 0.035, 0.16, 10), 0xFFF6E6, 0, 0.12, 0, { parent: stand, outline: 'thin' });
   P(new THREE.CylinderGeometry(0.3, 0.3, 0.03, 28), 0xFFF6E6, 0, 0.21, 0, { parent: stand });
@@ -2078,7 +2389,7 @@ function buildDecor() {
   flowers(4.15, COUNTER_H + 0.18, -2.8, 0.16, 4);
 
   // cozy upgrade: more plants, a hanging plant and a flower garland on the counter
-  DECOR.cozy = new THREE.Group(); scene.add(DECOR.cozy);
+  DECOR.cozy = new THREE.Group(); ROOT.add(DECOR.cozy);
   plant(5.45, 0, 1.75, 1.4, DECOR.cozy);
   plant(-2.25, 0, 4.4, 1.2, DECOR.cozy);
   const hang = new THREE.Group(); hang.position.set(-5.0, 3.15, -4.2); DECOR.cozy.add(hang);
@@ -2107,7 +2418,7 @@ function buildDecor() {
 function buildCat() {
   const g = new THREE.Group();
   g.position.set(2.75, 0.03, 3.45); g.rotation.y = -0.6;
-  scene.add(g);
+  ROOT.add(g);
   P(rbox(0.95, 0.16, 0.8, 0.07), 0xE97F7F, 0, 0.08, 0, { parent: g });
   const fur = 0xF2A65A, dark = 0xD9823B;
   CAT.body = P(new THREE.SphereGeometry(0.3, 22, 16), fur, 0, 0.34, 0, { parent: g });
@@ -2156,7 +2467,8 @@ class Anchor {
     this.inner.className = cls;
     this.cls = cls;
     this.el.appendChild(this.inner);
-    labelsEl.appendChild(this.el);
+    this.lv = LV;
+    (LV ? LV.labels : labelsEl).appendChild(this.el);
     this.pos = new THREE.Vector3();
     this.visible = true;
     this.html = null;
@@ -2248,8 +2560,8 @@ function updateTweens(dt) {
 let T = 0;                 // game clock in seconds
 let started = false;
 const MAX_ITEMS = 55;
-const items = new Set();
-const pickables = [];
+let items = new Set();
+let pickables = [];
 function addPickable(o) { pickables.push(o); }
 function removePickable(o) { const i = pickables.indexOf(o); if (i >= 0) pickables.splice(i, 1); }
 
@@ -2290,7 +2602,7 @@ class Item {
     this.location = 'world';   // world | held | oven | anim
     this.slot = null;
     this.born = T;
-    scene.add(this.mesh);
+    ROOT.add(this.mesh);
     items.add(this);
     addPickable(this.mesh);
     this.place(x, y, z);
@@ -2347,7 +2659,7 @@ function destroyItem(it, fx = false) {
   if (hold.item === it) endHold();
   if (it.slot) { it.slot.item = null; it.slot = null; }
   it.removeBody();
-  scene.remove(it.mesh);
+  it.mesh.removeFromParent();
   removePickable(it.mesh);
   items.delete(it);
   it.mesh.traverse((o) => forMats(o, (m) => { if (m.userData.bake) m.dispose(); }));
@@ -2407,22 +2719,23 @@ function combineCake(cake, berry) {
 /* =====================================================================
    Pantry sources
    ===================================================================== */
-const sources = [];
-function buildSources() {
-  for (const s of SOURCES) {
+let sources = [];
+function buildSources(list = SOURCES) {
+  for (const s of list) {
     const [x, y, z] = s.pos;
     const g = new THREE.Group();
     g.position.set(x, y, z);
-    scene.add(g);
-    SOURCE_BUILD[s.key](g, x, y, z);
+    ROOT.add(g);
     const onShelf = y > 1.5;
+    SOURCE_BUILD[s.key](g, x, y, z);
+    if (onShelf && s.fit) g.scale.setScalar(s.fit);
     const hit = new THREE.Mesh(new THREE.BoxGeometry(onShelf ? 0.66 : 0.95, 0.86, 1.2), HIDDEN);
     hit.position.set(x, y + 0.43, z);
     hit.userData.source = s.key;
-    scene.add(hit);
+    ROOT.add(hit);
     addPickable(hit);
     // locked ingredients sit under a checked cloth until you unlock a recipe that uses them
-    const cover = new THREE.Group(); cover.position.set(x, y, z); scene.add(cover);
+    const cover = new THREE.Group(); cover.position.set(x, y, z); ROOT.add(cover);
     const cw = onShelf ? 0.5 : 0.72, chh = onShelf ? 0.34 : 0.42;
     P(rbox(cw * 0.9, chh * 0.8, 0.8, 0.04), 0xC98B4E, 0, chh * 0.4, 0, { parent: cover });
     P(rbox(cw, 0.14, 0.9, 0.06), new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.gingham }), 0, chh * 0.8 + 0.02, 0, { parent: cover });
@@ -2444,7 +2757,7 @@ function refreshSources() {
 function takeFromSource(src) {
   if (!src) return;
   if (src.locked) {
-    const r = RECIPES.find((rr) => rr.needs[src.key] || rr.topping === src.key);
+    const r = LV.recipes.find((rr) => rr.needs[src.key] || rr.topping === src.key);
     toast(`Unlock <b>${ITEMS[r.sells].name}</b> in the Shop to use ${ITEMS[src.key].name.toLowerCase()}.`);
     Sound.sad();
     return;
@@ -2490,39 +2803,42 @@ function updateBowl(dt) {
     return;
   }
   BOWL.contents = bowlItems();
-  const c = countKinds(BOWL.contents);
-  const known = RECIPES.filter(recipeKnown);
-  const any = BOWL.contents.length > 0;
-  BOWL.match = any ? known.find((r) => sameCounts(r.needs, c)) || null : null;
-  // recipes this mix could still become, closest first
+  const st = mixState(BOWL.contents, LV.recipes.filter((r) => (r.station || 'oven') === 'oven'));
+  BOWL.match = st.match; BOWL.partial = st.partial; BOWL.lockedMatch = st.lockedMatch;
+  if (st.sig !== BOWL.sig) { BOWL.sig = st.sig; BOWL.anchor.set(mixHtml(st, 'mix', 'tip', 'Mix!')); }
+  BOWL.anchor.show(st.any);
+}
+// What a pile of ingredients can become: an exact match, the recipes it's heading toward, or nothing
+function mixState(contents, recipes) {
+  const c = countKinds(contents), any = contents.length > 0;
+  const known = recipes.filter(recipeKnown);
+  const match = any ? known.find((r) => sameCounts(r.needs, c)) || null : null;
   const cands = any ? known.filter((r) => subsetOf(c, r.needs) && !sameCounts(r.needs, c)).map((r) => {
     const missing = Object.entries(r.needs).filter(([k, n]) => n > (c[k] || 0)).map(([k, n]) => [k, n - (c[k] || 0)]);
-    return { r, missing, n: missing.reduce((a, [, m]) => a + m, 0) };
-  }).sort((a, b) => a.n - b.n || a.r.cost - b.r.cost) : [];
-  BOWL.partial = !BOWL.match && cands.length > 0;
-  BOWL.lockedMatch = any && !BOWL.match ? RECIPES.find((r) => !recipeKnown(r) && sameCounts(r.needs, c)) || null : null;
-  const sig = JSON.stringify(c) + (BOWL.match ? BOWL.match.id : '') + cands.map((x) => x.r.id).join() + (BOWL.lockedMatch ? 'L' : '');
-  if (sig !== BOWL.sig) {
-    BOWL.sig = sig;
-    const img = (k, cls = '') => `<img class="${cls}" src="${ICON[k]}" alt="${ITEMS[k].name}" title="${ITEMS[k].name}">`;
-    const need = (missing) => missing.map(([k, n]) => `<span class="ing">${img(k)}${n > 1 ? `<b>×${n}</b>` : ''}</span>`).join('');
-    let html = '<div class="bowl-have">' + Object.entries(c).map(([k, n]) =>
-      `<span class="ing">${img(k)}${n > 1 ? `<b>×${n}</b>` : ''}</span>`).join('') + '</div>';
-    if (BOWL.match) {
-      html += `<div class="bowl-row"><span class="arrow">→</span>${img(BOWL.match.makes, 'res')}<b>${ITEMS[BOWL.match.makes].name}</b><button class="mini pulse" data-act="mix">Mix!</button></div>`;
-      for (const x of cands.slice(0, 2)) html += `<div class="bowl-row soft">or add ${need(x.missing)} for ${img(x.r.sells, 'res')}</div>`;
-    } else if (cands.length) {
-      for (const x of cands.slice(0, 3)) html += `<div class="bowl-row">${img(x.r.sells, 'res')}<b>${ITEMS[x.r.sells].name}</b><span class="need">needs</span>${need(x.missing)}</div>`;
-      html += '<div class="bowl-row end"><button class="mini alt" data-act="tip">Tip out</button></div>';
-    } else if (BOWL.lockedMatch) {
-      html += `<div class="bowl-row">🔒 <b>${ITEMS[BOWL.lockedMatch.sells].name}</b><span class="need">unlock it in the Shop</span></div>`;
-      html += '<div class="bowl-row end"><button class="mini alt" data-act="tip">Tip out</button></div>';
-    } else {
-      html += '<div class="bowl-row"><span class="need">No recipe uses this mix.</span><button class="mini alt" data-act="tip">Tip out</button></div>';
-    }
-    BOWL.anchor.set(html);
+    return { r, missing, n: missing.reduce((acc, [, m]) => acc + m, 0) };
+  }).sort((x, y) => x.n - y.n || x.r.cost - y.r.cost) : [];
+  const lockedMatch = any && !match ? recipes.find((r) => !recipeKnown(r) && sameCounts(r.needs, c)) || null : null;
+  const sig = JSON.stringify(c) + (match ? match.id : '') + cands.map((x) => x.r.id).join() + (lockedMatch ? 'L' : '');
+  return { c, any, match, cands, lockedMatch, partial: !match && cands.length > 0, sig };
+}
+function mixHtml(st, mixAct, tipAct, verb) {
+  const img = (k, cls = '') => `<img class="${cls}" src="${ICON[k]}" alt="${ITEMS[k].name}" title="${ITEMS[k].name}">`;
+  const need = (missing) => missing.map(([k, n]) => `<span class="ing">${img(k)}${n > 1 ? `<b>×${n}</b>` : ''}</span>`).join('');
+  let html = '<div class="bowl-have">' + Object.entries(st.c).map(([k, n]) =>
+    `<span class="ing">${img(k)}${n > 1 ? `<b>×${n}</b>` : ''}</span>`).join('') + '</div>';
+  if (st.match) {
+    html += `<div class="bowl-row"><span class="arrow">→</span>${img(st.match.makes, 'res')}<b>${ITEMS[st.match.makes].name}</b><button class="mini pulse" data-act="${mixAct}">${verb}</button></div>`;
+    for (const x of st.cands.slice(0, 2)) html += `<div class="bowl-row soft">or add ${need(x.missing)} for ${img(x.r.sells, 'res')}</div>`;
+  } else if (st.cands.length) {
+    for (const x of st.cands.slice(0, 3)) html += `<div class="bowl-row">${img(x.r.sells, 'res')}<b>${ITEMS[x.r.sells].name}</b><span class="need">needs</span>${need(x.missing)}</div>`;
+    html += `<div class="bowl-row end"><button class="mini alt" data-act="${tipAct}">Tip out</button></div>`;
+  } else if (st.lockedMatch) {
+    html += `<div class="bowl-row">🔒 <b>${ITEMS[st.lockedMatch.sells].name}</b><span class="need">unlock it in the Shop</span></div>`;
+    html += `<div class="bowl-row end"><button class="mini alt" data-act="${tipAct}">Tip out</button></div>`;
+  } else {
+    html += `<div class="bowl-row"><span class="need">No recipe uses this mix.</span><button class="mini alt" data-act="${tipAct}">Tip out</button></div>`;
   }
-  BOWL.anchor.show(any);
+  return html;
 }
 // Where the next ingredient should land: the spot furthest from what's already in the bowl
 const BOWL_SPOTS = [[0, 0], [0.38, 0], [-0.38, 0], [0, 0.38], [0, -0.38], [0.27, 0.27], [-0.27, 0.27], [0.27, -0.27], [-0.27, -0.27]];
@@ -2582,7 +2898,12 @@ function tipBowl() {
 /* =====================================================================
    Oven
    ===================================================================== */
-const ovenAccepts = (it) => it.info.type === 'good' && !!it.info.bake && it.state !== 'burnt';
+function ovenSnap(it) {
+  const slot = OVEN.slots.find((sl) => !sl.item) || OVEN.slots[1];
+  const out = OVEN.front + 0.4 + it.radius, y = OVEN.floor + 0.35 + it.radius;
+  return OVEN.dir === 'x' ? V(out, y, slot.pos.z) : V(slot.pos.x, y, out);
+}
+const ovenAccepts = (it) => it.info.type === 'good' && !!it.info.bake && !it.info.plated && it.state !== 'burnt';
 function ovenInsert(it) {
   const slot = OVEN.slots.find((s) => !s.item);
   if (!slot) { toast('The oven is full!'); Sound.sad(); return false; }
@@ -2594,8 +2915,9 @@ function ovenInsert(it) {
   const to = slot.pos.clone(); to.y += it.rest;
   // long loaves point into the oven; everything else turns its face toward you
   const lengthwise = it.kind === 'baguette';
-  if (lengthwise) to.x -= 0.1;
-  const q1 = new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), lengthwise ? 0 : Math.PI / 2);
+  const faceYaw = OVEN.dir === 'x' ? Math.PI / 2 : 0;
+  if (lengthwise) { if (OVEN.dir === 'x') to.x -= 0.1; else to.z -= 0.1; }
+  const q1 = new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), lengthwise ? faceYaw - Math.PI / 2 : faceYaw);
   tween(0.35, (k) => {
     const e = smooth(k);
     it.mesh.position.lerpVectors(from, to, e);
@@ -2637,8 +2959,11 @@ function updateOven(dt) {
   OVEN.glowMat.color.setScalar(damp(OVEN.glowMat.color.r, baking ? 1 : 0.45, 4, dt));
   OVEN.eyeHappy.visible = baking > 0 && !warn;
   OVEN.eyeOpen.visible = !OVEN.eyeHappy.visible;
-  OVEN.face.position.z = OVEN.zc + (warn ? Math.sin(T * 45) * 0.02 : 0);
-  if (baking && Math.random() < dt * 1.3) {
+  if (OVEN.face) {
+    const wob = warn ? Math.sin(T * 45) * 0.02 : 0;
+    if (OVEN.dir === 'x') OVEN.face.position.z = OVEN.zc + wob; else OVEN.face.position.x = OVEN.xc + wob;
+  }
+  if (OVEN.chimney && baking && Math.random() < dt * 1.3) {
     particle(TEX.puff, OVEN.chimney.clone(), { vel: V(rand(-0.1, 0.2), rand(0.6, 0.9), rand(-0.1, 0.2)), life: 2, size: 0.3, grow: 2.8, color: 0xF3EDE4, opacity: 0.8 });
   }
 }
@@ -2678,7 +3003,7 @@ function updateTrash() {
    ===================================================================== */
 const SPOTS = [0.35, 1.85, 3.3].map((x, i) => ({ x, z: -3.5, c: null, bubbleUp: i === 1 ? 0.5 : 0 }));  // middle bubble sits higher so they don't overlap
 const LANE_Z = -4.02, OUT_Z = -5.3;
-const customers = [];
+let customers = [];
 const CUST_TYPES = ['bunny', 'bear', 'cat', 'pup'];
 const CUST_S = 1.35;   // customers are drawn a bit bigger than life so they read well over the counter
 const SHIRTS = [0x7FB4E0, 0xF28C8C, 0x9ACD7B, 0xF7C85C, 0xB79AE0, 0xF4A6C8];
@@ -2770,7 +3095,7 @@ class Customer {
     this.type = pick(CUST_TYPES);
     this.m = buildCustomerMesh(this.type);
     this.g = this.m.g;
-    scene.add(this.g);
+    ROOT.add(this.g);
     this.pos = V(DOOR.x, 0, OUT_Z);
     this.path = [V(DOOR.x, 0, LANE_Z), V(spot.x, 0, LANE_Z + 0.15), V(spot.x, 0, spot.z)];
     this.state = 'enter';
@@ -2788,7 +3113,7 @@ class Customer {
     this.bubble = new Anchor('bub order');
     this.bubble.show(false);
     this.zoneRoot = new THREE.Group();
-    scene.add(this.zoneRoot);
+    ROOT.add(this.zoneRoot);
     this.zone = makeZone(new THREE.BoxGeometry(1.35, 2.0, 2.2), 0, 1.3, 0.6, {
       visual: this.g,
       accepts: (it) => this.state === 'wait' && it.kind === this.order,
@@ -2852,7 +3177,7 @@ class Customer {
       it.mesh.position.y += Math.sin(k * Math.PI) * 0.3;
       it.mesh.scale.setScalar(ITEM_S * (1 - 0.8 * k));
     }, () => destroyItem(it));
-    const rec = RECIPES.find((r) => r.sells === this.order);
+    const rec = ALL_RECIPES.find((r) => r.sells === this.order);
     const base = Math.round(rec.price * priceMult());
     const frac = this.patience === Infinity ? 1 : clamp(1 - this.wait / this.patience, 0, 1);
     let tip = Math.round(base * 0.35 * frac);
@@ -2880,8 +3205,8 @@ class Customer {
     this.path = [V(this.pos.x, 0, LANE_Z), V(DOOR.x, 0, LANE_Z), V(DOOR.x, 0, OUT_Z)];
   }
   remove() {
-    scene.remove(this.g);
-    scene.remove(this.zoneRoot);
+    this.g.removeFromParent();
+    this.zoneRoot.removeFromParent();
     world.removeBody(this.body);
     this.bubble.destroy();
     const zi = zones.indexOf(this.zone.mesh);
@@ -2963,7 +3288,8 @@ function updateSpawner(dt) {
   if (spawnT > 0) return;
   // gentle pacing: one customer at a time at first, more as the bakery grows
   const active = customers.filter((c) => c.state !== 'leave').length;
-  const cap = state.served < 5 ? 1 : state.served < 15 ? 2 : 3;
+  const bakeryServed = state.served - (state.servedR || 0);
+  const cap = bakeryServed < 5 ? 1 : bakeryServed < 15 ? 2 : 3;
   const free = SPOTS.filter((s) => !s.c);
   if (active >= cap || !free.length) { spawnT = rand(5, 9); return; }
   const menu = RECIPES.filter(recipeKnown).map((r) => r.sells);
@@ -2977,7 +3303,7 @@ function updateDoor(dt) {
   const near = customers.some((c) => Math.abs(c.pos.x - DOOR.x) < 0.8 && c.pos.z < -3.55);
   DOOR.angle = damp(DOOR.angle, near ? 1.35 : 0, 7, dt);
   DOOR.pivot.rotation.y = DOOR.angle;
-  if (DECOR.bell.visible) DECOR.bellCup.rotation.z = Math.sin(T * 16) * 0.45 * clamp((DOOR.ringT || 0) - T, 0, 1);
+  if (LV.id === 'bakery' && DECOR.bell.visible) DECOR.bellCup.rotation.z = Math.sin(T * 16) * 0.45 * clamp((DOOR.ringT || 0) - T, 0, 1);
 }
 
 /* =====================================================================
@@ -3057,10 +3383,10 @@ function pickAt() {
     if (!o) continue;
     if (o.userData.item) {
       const it = o.userData.item;
-      if (it.location === 'world' || it.location === 'oven' || it.location === 'case') return { item: it };
+      if (it.location === 'world' || it.location === 'oven' || it.location === 'case' || it.location === 'pan') return { item: it };
       continue;
     }
-    if (!other) other = o.userData.source ? { source: sources.find((s) => s.key === o.userData.source) } : { action: o.userData.action };
+    if (!other) other = o.userData.source ? { source: sources.find((s) => s.key === o.userData.source) } : { action: o.userData.action, obj: o };
   }
   return other;
 }
@@ -3069,7 +3395,14 @@ function yawOf(q) { q.vmult(_xv, _xo); return Math.atan2(-_xo.z, _xo.x); }
 function grab(it) {
   if (it.location === 'oven') {
     ovenTake(it);
-    it.place(OVEN.front + it.radius + 0.12, 1.2 + it.rest, it.mesh.position.z, it.mesh.quaternion);
+    const out = OVEN.front + it.radius + 0.12, oy = OVEN.floor + 0.2 + it.rest;
+    if (OVEN.dir === 'x') it.place(out, oy, it.mesh.position.z, it.mesh.quaternion);
+    else it.place(it.mesh.position.x, oy, out, it.mesh.quaternion);
+  } else if (it.location === 'pan') {
+    const sp = it.slot.pos;
+    ovenTake(it);
+    showPlate(it, true);
+    it.place(sp.x, sp.y + 0.55 + it.rest, sp.z + 0.95, new THREE.Quaternion());
   } else if (it.location === 'case') {
     const sp = it.slot.pos;
     ovenTake(it);
@@ -3123,7 +3456,7 @@ function updateHoldTarget() {
   }
 }
 // Held items are steered with velocities so they still collide with everything
-world.addEventListener('preStep', () => {
+function holdStep() {
   const it = hold.item;
   if (!it) return;
   const b = it.body, t = hold.target;
@@ -3136,7 +3469,7 @@ world.addEventListener('preStep', () => {
   _qa.mult(_qb, _qc);
   if (_qc.w < 0) { _qc.x = -_qc.x; _qc.y = -_qc.y; _qc.z = -_qc.z; }
   b.angularVelocity.set(_qc.x * 20, _qc.y * 20, _qc.z * 20);
-});
+}
 function updateZone() {
   const it = hold.item;
   let z = null;
@@ -3228,7 +3561,8 @@ function updateHover() {
     obj = s.locked ? s.cover : s.g; tip = ITEMS[s.key].name + (s.locked ? ' (locked: unlock a recipe in the Shop)' : ''); cursor = s.locked ? 'not-allowed' : 'grab';
   } else if (hit && hit.action === 'mix' && BOWL.match) { obj = BOWL.mesh; tip = 'Mix!'; cursor = 'pointer'; }
   else if (hit && hit.action === 'cat') { obj = CAT.g; tip = 'Pet the cat'; cursor = 'pointer'; }
-  else if (hit && hit.action === 'book') { obj = BOARD.g; tip = 'Recipe board: click to read'; cursor = 'pointer'; }
+  else if (hit && hit.action === 'book') { obj = hit.obj; tip = inResto() ? 'Menu: click to read the recipes' : 'Recipe board: click to read'; cursor = 'pointer'; }
+  else if (hit && hit.action === 'pan' && hit.obj.userData.pan.match) { obj = hit.obj; tip = 'Cook!'; cursor = 'pointer'; }
   setHover(obj);
   showTip(tip);
   canvas.style.cursor = cursor;
@@ -3278,6 +3612,7 @@ canvas.addEventListener('pointerdown', (e) => {
   else if (hit && hit.action === 'mix' && BOWL.match) startMix();
   else if (hit && hit.action === 'cat') petCat();
   else if (hit && hit.action === 'book') { Sound.click(); openPanel('book'); }
+  else if (hit && hit.action === 'pan' && hit.obj.userData.pan.match) startCook(hit.obj.userData.pan);
   else panDrag = { x: e.clientX, y: e.clientY, px: view.panX, py: view.panY };
 });
 window.addEventListener('pointermove', (e) => {
@@ -3316,7 +3651,7 @@ window.addEventListener('blur', () => { if (hold.item) release(true); touches.cl
 /* =====================================================================
    Zones, cat, clock, small helpers
    ===================================================================== */
-function buildZones() {
+function bowlZone() {
   makeZone(new THREE.CylinderGeometry(0.95, 0.95, 1.7, 16), BOWL.pos.x, BOWL.pos.y + 0.7, BOWL.pos.z, {
     visual: BOWL.mesh,
     accepts: (it) => it.info.type === 'ingredient' && BOWL.mixing <= 0,
@@ -3336,13 +3671,19 @@ function buildZones() {
       return V(BOWL.pos.x + ox, top + 0.3 + it.radius, BOWL.pos.z + oz);
     },
   });
-  makeZone(new THREE.BoxGeometry(1.1, 2.3, 2.7), OVEN.front - 0.2, 1.75, OVEN.zc, {
-    visual: OVEN.mesh, accepts: ovenAccepts, drop: ovenInsert,
-    snap: (it) => {
-      const slot = OVEN.slots.find((sl) => !sl.item) || OVEN.slots[1];
-      return V(OVEN.front + 0.4 + it.radius, 1.35 + it.radius, slot.pos.z);
-    },
+}
+function ovenZone(geo, x, y, z) {
+  makeZone(geo, x, y, z, { visual: OVEN.mesh, accepts: ovenAccepts, drop: ovenInsert, snap: ovenSnap });
+}
+function trashZone() {
+  makeZone(new THREE.CylinderGeometry(0.6, 0.6, 1.5, 16), TRASH.pos.x, 0.75, TRASH.pos.z, {
+    visual: TRASH.mesh, accepts: (it) => it.kind !== 'coin', drop: trashDrop,
+    snap: (it) => V(TRASH.pos.x, 1.2 + it.radius, TRASH.pos.z),
   });
+}
+function buildZones() {
+  bowlZone();
+  ovenZone(new THREE.BoxGeometry(1.1, 2.3, 2.7), OVEN.front - 0.2, 1.75, OVEN.zc);
   makeZone(new THREE.BoxGeometry(CASE.x1 - CASE.x0, 1.25, 1.3), (CASE.x0 + CASE.x1) / 2, 0.85, CASE.z + 0.2, {
     visual: CASE.g, accepts: caseAccepts, drop: caseInsert,
     snap: (it) => {
@@ -3350,10 +3691,7 @@ function buildZones() {
       return V(slot.pos.x, Math.max(slot.pos.y + it.radius + 0.05, 0.45), CASE.z + 0.55 + it.radius);
     },
   });
-  makeZone(new THREE.CylinderGeometry(0.6, 0.6, 1.5, 16), TRASH.pos.x, 0.75, TRASH.pos.z, {
-    visual: TRASH.mesh, accepts: (it) => it.kind !== 'coin', drop: trashDrop,
-    snap: (it) => V(TRASH.pos.x, 1.2 + it.radius, TRASH.pos.z),
-  });
+  trashZone();
 }
 function petCat() {
   CAT.awake = 2.5;
@@ -3408,13 +3746,13 @@ function renderShop() {
   const coin = '<span class="coin s"></span>';
   let html = '';
   if (shopTab === 'recipes') {
-    for (const r of RECIPES) {
+    for (const r of LV.recipes) {
       const known = recipeKnown(r);
       const ings = Object.entries(r.needs).map(([k, n]) =>
         `<img src="${ICON[k]}" alt="${ITEMS[k].name}" title="${ITEMS[k].name}">${n > 1 ? `×${n}` : ''}`).join('<span class="op">+</span>');
       const tail = r.topping
         ? `<span class="op">→ bake →</span><img src="${ICON[r.makes]}" alt=""><span class="op">+</span><img src="${ICON[r.topping]}" alt="${ITEMS[r.topping].name}" title="${ITEMS[r.topping].name}">`
-        : '<span class="op">→ bake</span>';
+        : `<span class="op">→ ${r.station === 'stove' ? 'cook in a pan' : 'bake'}</span>`;
       const action = known
         ? '<span class="owned">✓ Known</span>'
         : `<button class="btn buy" data-buy="r:${r.id}" ${state.coins < r.cost ? 'disabled' : ''}>${coin} ${r.cost}</button>`;
@@ -3423,7 +3761,7 @@ function renderShop() {
         <p>Sells for ${coin} ${Math.round(r.price * priceMult())}</p></div><div>${action}</div></div>`;
     }
   } else {
-    for (const u of UPGRADES) {
+    for (const u of LV.upgrades) {
       const owned = has(u.id);
       const action = owned
         ? '<span class="owned">✓ Owned</span>'
@@ -3439,13 +3777,13 @@ $('shopList').addEventListener('click', (e) => {
   if (!b || b.disabled) return;
   const [kind, id] = b.dataset.buy.split(':');
   if (kind === 'r') {
-    const r = RECIPES.find((x) => x.id === id);
+    const r = LV.recipes.find((x) => x.id === id);
     if (!r || recipeKnown(r) || state.coins < r.cost) return;
     state.coins -= r.cost;
     state.recipes.push(id);
     toast(`New recipe: <b>${ITEMS[r.sells].name}</b>!`);
   } else {
-    const u = UPGRADES.find((x) => x.id === id);
+    const u = LV.upgrades.find((x) => x.id === id);
     if (!u || has(id) || state.coins < u.cost) return;
     state.coins -= u.cost;
     state.upgrades.push(id);
@@ -3457,7 +3795,7 @@ $('shopList').addEventListener('click', (e) => {
   renderShop();
 });
 function updateShopBadge() {
-  const can = RECIPES.some((r) => !recipeKnown(r) && state.coins >= r.cost) || UPGRADES.some((u) => !has(u.id) && state.coins >= u.cost);
+  const can = LV.recipes.some((r) => !recipeKnown(r) && state.coins >= r.cost) || LV.upgrades.some((u) => !has(u.id) && state.coins >= u.cost);
   $('shopBadge').classList.toggle('on', can && state.tutorialDone);
   if (!$('shop').classList.contains('hidden')) renderShop();
 }
@@ -3476,17 +3814,17 @@ function closePanels() {
 function renderBook() {
   const coin = '<span class="coin s"></span>';
   const icon = (k, n) => `<img src="${ICON[k]}" alt="${ITEMS[k].name}" title="${ITEMS[k].name}">${n > 1 ? `×${n}` : ''}`;
-  $('bookList').innerHTML = RECIPES.map((r) => {
+  $('bookList').innerHTML = LV.recipes.map((r) => {
     const known = recipeKnown(r);
     const ings = Object.entries(r.needs).map(([k, n]) => icon(k, n)).join('<span class="op">+</span>');
     const tail = r.topping
       ? `<span class="op">→ bake →</span>${icon(r.makes, 1)}<span class="op">+</span>${icon(r.topping, 1)}`
-      : '<span class="op">→ bake</span>';
+      : `<span class="op">→ ${r.station === 'stove' ? 'cook in a pan' : 'bake'}</span>`;
     const bake = ITEMS[r.makes].bake;
     const action = known ? '' : `<button class="btn buy" data-shop="1">${coin} ${r.cost}</button>`;
     return `<div class="row ${known ? '' : 'locked'}"><div class="pic"><img src="${ICON[r.sells]}" alt=""></div>
       <div><h3>${ITEMS[r.sells].name}${known ? '' : ' 🔒'}</h3><div class="ings big">${ings}${tail}</div>
-      <div class="meta"><span>Bakes in ${Math.round(bake * bakeMult())}s</span><span>Sells for ${coin} ${Math.round(r.price * priceMult())}</span></div></div>
+      <div class="meta"><span>${r.station === 'stove' ? 'Cooks' : 'Bakes'} in ${Math.round(bake * (r.station === 'stove' ? stoveMult() : bakeMult()))}s</span><span>Sells for ${coin} ${Math.round(r.price * priceMult())}</span></div></div>
       <div>${action}</div></div>`;
   }).join('');
 }
@@ -3494,6 +3832,7 @@ $('bookList').addEventListener('click', (e) => { if (e.target.closest('[data-sho
 $('shopBtn').addEventListener('click', () => { Sound.init(); Sound.click(); openPanel('shop'); });
 $('helpBtn').addEventListener('click', () => { Sound.init(); Sound.click(); openPanel('help'); });
 $('bookBtn').addEventListener('click', () => { Sound.init(); Sound.click(); openPanel('book'); });
+$('worldBtn').addEventListener('click', () => { Sound.init(); Sound.bell(); goTo(LV.id === 'bakery' ? 'resto' : 'bakery'); });
 $('soundBtn').addEventListener('click', () => { Sound.init(); Sound.setMuted(!state.muted); updateSoundBtn(); Sound.click(); });
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closePanels));
 document.querySelectorAll('#shop, #help, #book').forEach((o) => o.addEventListener('pointerdown', (e) => { if (e.target === o) closePanels(); }));
@@ -3521,6 +3860,9 @@ $('resetBtn').addEventListener('click', () => {
 labelsEl.addEventListener('click', (e) => {
   const b = e.target.closest('[data-act]');
   if (!b) return;
+  const act = b.dataset.act;
+  if (act.startsWith('cook:')) { startCook(PANS[+act.slice(5)]); return; }
+  if (act.startsWith('tipPan:')) { tipPan(PANS[+act.slice(7)]); return; }
   if (b.dataset.act === 'mix') startMix();
   else if (b.dataset.act === 'tip') tipBowl();
 });
@@ -3530,15 +3872,28 @@ function updateHUD() {
   if (state.coins !== coinShown) { coinShown = state.coins; $('coinText').textContent = state.coins; }
   if (state.served !== servedShown) { servedShown = state.served; $('servedText').textContent = state.served; }
 }
+function withLevel(lv, fn) {
+  const prev = LV;
+  bindLevel(lv);
+  try { fn(); } finally { if (prev) bindLevel(prev); }
+}
 function applyProgress() {
-  DECOR.cozy.visible = has('cozy');
-  DECOR.awning.visible = has('awning');
-  DECOR.bell.visible = has('bell');
-  CAT.g.visible = has('cat');
-  if (has('cozy') && !DECOR.cozyCol) DECOR.cozyCol = [colBox(5.45, 0.36, 1.75, 0.42, 0.36, 0.42), colBox(-2.25, 0.3, 4.4, 0.36, 0.3, 0.36)];
-  if (has('cat') && !CAT.col) CAT.col = colBox(2.75, 0.25, 3.45, 0.45, 0.25, 0.42);
-  refreshSources();
-  drawBoard();
+  withLevel(LEVELS.bakery, () => {
+    DECOR.cozy.visible = has('cozy');
+    DECOR.awning.visible = has('awning');
+    DECOR.bell.visible = has('bell');
+    CAT.g.visible = has('cat');
+    if (has('cozy') && !DECOR.cozyCol) DECOR.cozyCol = [colBox(5.45, 0.36, 1.75, 0.42, 0.36, 0.42), colBox(-2.25, 0.3, 4.4, 0.36, 0.3, 0.36)];
+    if (has('cat') && !CAT.col) CAT.col = colBox(2.75, 0.25, 3.45, 0.45, 0.25, 0.42);
+    refreshSources();
+  });
+  withLevel(LEVELS.resto, () => {
+    for (const t of TABLES) t.candles.visible = has('candles');
+    RDECOR.gramophone.visible = has('gramophone');
+    RDECOR.star.visible = has('star');
+    refreshSources();
+  });
+  for (const lv of Object.values(LEVELS)) drawBoard(lv);
   updateShopBadge();
   updateSoundBtn();
 }
@@ -3654,6 +4009,757 @@ function makeIcons() {
   r.forceContextLoss();
 }
 
+
+/* =====================================================================
+   The restaurant: Maison Hillside
+   ===================================================================== */
+const PANS = [];
+const TABLES = [[1.4, -1.4], [3.9, -1.4], [1.4, 1.9], [3.9, 1.9]].map(([x, z], i) => ({ x, z, row: i < 2 ? 0 : 1, guest: null, candles: null }));
+const RDECOR = { flames: [] };
+const PANTRY_R = { z0: -0.2, z1: 4.45, cols: [0.38, 1.54, 2.7, 3.86], shelves: [1.95, 2.9] };
+const SOURCES_R = [
+  { key: 'beef',       pos: [-5.0, 1.0, 0.38] },
+  { key: 'fish',       pos: [-5.0, 1.0, 1.54] },
+  { key: 'potato',     pos: [-5.0, 1.0, 2.7] },
+  { key: 'egg',        pos: [-5.0, 1.0, 3.86] },
+  { key: 'tomato',     pos: [-5.17, 1.95, 0.38] },
+  { key: 'pasta',      pos: [-5.17, 1.95, 1.54] },
+  { key: 'herbs',      pos: [-5.17, 1.95, 2.7] },
+  { key: 'lemon',      pos: [-5.17, 1.95, 3.86] },
+  { key: 'cream',      pos: [-5.17, 2.9, 0.38] },
+  { key: 'sugar',      pos: [-5.17, 2.9, 1.54] },
+  { key: 'butter',     pos: [-5.17, 2.9, 2.7], fit: 0.82 },
+  { key: 'strawberry', pos: [-5.17, 2.9, 3.86] },
+];
+const PANTRY_WALNUT = { wood: 0x5A3624, light: 0x8A5A3B, dark: 0x40271A, drawer: 0x6B4430, knob: 0xD9B25A, back: 0x3F5C4A, crown: 0x3A2418, sc: [0xD9B25A, 0x2F4A3B] };
+const GOLD = 0xD9B25A, WALNUT = 0x4E2F20, DARKWOOD = 0x3A2418, VELVET = 0x8E2F3A;
+
+Object.assign(SOURCE_BUILD, {
+  beef(g, x, y, z) {
+    P(rbox(0.62, 0.06, 0.82, 0.03), 0xB5773F, 0, 0.03, 0, { parent: g });
+    P(rbox(0.5, 0.012, 0.64, 0.005), 0xF3E6D0, 0, 0.066, 0, { parent: g, outline: false });
+    for (const [dz, r] of [[-0.15, 0.2], [0.15, -0.25]]) { const b = MODELS.beef().g; b.position.set(0, 0.12, dz); b.rotation.y = Math.PI / 2 + r; g.add(b); }
+    colBox(x, y + 0.08, z, 0.31, 0.08, 0.41);
+  },
+  fish(g, x, y, z) {
+    P(rbox(0.62, 0.08, 0.82, 0.03), 0xB8C0C6, 0, 0.04, 0, { parent: g });
+    P(rbox(0.54, 0.03, 0.74, 0.02), 0xEAF6FA, 0, 0.09, 0, { parent: g, outline: 'thin' });
+    for (const [dz, r] of [[-0.16, 0.25], [0.16, -0.2]]) { const f = MODELS.fish().g; f.position.set(0, 0.15, dz); f.rotation.y = Math.PI / 2 + r; g.add(f); }
+    const ls = P(GEO.lemonSlice, 0xF6D43B, 0.16, 0.13, 0.02, { parent: g, outline: 'thin' }); ls.rotation.x = 0.3;
+    colBox(x, y + 0.08, z, 0.31, 0.08, 0.41);
+  },
+  potato(g, x, y, z) {
+    const sack = mesh(GEO.sack, toon(0xC9A57A)); sack.scale.set(1.45, 0.85, 1.45); sack.position.y = 0.2; g.add(sack);
+    [[0, 0.44, 0], [0.1, 0.42, 0.1], [-0.09, 0.42, 0.08], [0.03, 0.41, -0.12]].forEach(([px, py, pz], i) => {
+      const pt = MODELS.potato().g; pt.position.set(px, py, pz); pt.rotation.y = i; g.add(pt);
+    });
+    colBox(x, y + 0.25, z, 0.32, 0.25, 0.32);
+  },
+  tomato(g, x, y, z) {
+    const wood = 0xB5773F;
+    P(rbox(0.5, 0.04, 0.62, 0.015), wood, 0, 0.02, 0, { parent: g });
+    for (const sd of [-1, 1]) {
+      P(rbox(0.5, 0.16, 0.035, 0.012), wood, 0, 0.1, sd * 0.29, { parent: g, outline: 'thin' });
+      P(rbox(0.035, 0.16, 0.62, 0.012), wood, sd * 0.235, 0.1, 0, { parent: g, outline: 'thin' });
+    }
+    [[-0.1, 0.15, -0.14], [0.1, 0.15, -0.12], [-0.08, 0.15, 0.13], [0.1, 0.15, 0.12], [0, 0.26, 0]].forEach(([tx, ty, tz], i) => {
+      const t = MODELS.tomato().g; t.position.set(tx, ty, tz); t.rotation.y = i * 1.3; g.add(t);
+    });
+    colBox(x, y + 0.14, z, 0.26, 0.14, 0.31);
+  },
+  pasta(g, x, y, z) {
+    jar(g, TEX.pastaLabel);
+    const r = rng(8);
+    for (let i = 0; i < 16; i++) {
+      const st = P(new THREE.CylinderGeometry(0.008, 0.008, 0.52, 4), 0xF3D38A, (r() - 0.5) * 0.2, 0.42, (r() - 0.5) * 0.2, { parent: g, outline: false });
+      st.rotation.set((r() - 0.5) * 0.25, 0, (r() - 0.5) * 0.25);
+    }
+    colBox(x, y + 0.2, z, 0.22, 0.2, 0.22);
+  },
+  herbs(g, x, y, z) {
+    P(lathe([[0, 0], [0.13, 0], [0.17, 0.2], [0.19, 0.22], [0.19, 0.26], [0.15, 0.26], [0, 0.24]], 18), 0xC0704A, 0, 0, 0, { parent: g });
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + i, rr = 0.05 + (i % 3) * 0.04;
+      const l = P(GEO.bigLeaf, 0x5FAE45, Math.cos(a) * rr, 0.3 + (i % 4) * 0.04, Math.sin(a) * rr, { parent: g, outline: 'thin' });
+      l.rotation.set(0, -a, -0.4 - (i % 3) * 0.2); l.scale.setScalar(1.3);
+    }
+    colBox(x, y + 0.2, z, 0.2, 0.2, 0.2);
+  },
+  lemon(g, x, y, z) {
+    P(lathe([[0, 0], [0.16, 0], [0.26, 0.11], [0.27, 0.14], [0.24, 0.13], [0.15, 0.04], [0, 0.04]], 24), 0xFFFDF8, 0, 0, 0, { parent: g });
+    P(new THREE.TorusGeometry(0.255, 0.012, 6, 24), GOLD, 0, 0.135, 0, { parent: g, rx: Math.PI / 2, outline: false });
+    [[0, 0.12, 0, 0.3], [0.1, 0.12, 0.08, 1.2], [-0.1, 0.12, 0.07, 2.1], [0.02, 0.2, -0.05, 0.8]].forEach(([lx, ly, lz, r]) => {
+      const l = MODELS.lemon().g; l.position.set(lx, ly, lz); l.rotation.y = r; g.add(l);
+    });
+    colBox(x, y + 0.13, z, 0.27, 0.13, 0.27);
+  },
+  cream(g, x, y, z) {
+    for (const [dz, sc] of [[-0.16, 1.2], [0.17, 1.0]]) { const j = MODELS.cream().g; j.scale.setScalar(sc); j.position.set(0, 0.13 * sc, dz); j.rotation.y = 0.5; g.add(j); }
+    colBox(x, y + 0.17, z, 0.15, 0.17, 0.32);
+  },
+});
+
+function sconce(x, y, z) {
+  P(rbox(0.06, 0.28, 0.12, 0.02), GOLD, x, y, z, { cast: false, outline: 'thin' });
+  P(new THREE.CylinderGeometry(0.015, 0.015, 0.22, 6), GOLD, x + 0.11, y + 0.05, z, { rz: Math.PI / 2, outline: 'thin', cast: false });
+  P(new THREE.CylinderGeometry(0.1, 0.16, 0.2, 14), 0xFFF3DC, x + 0.22, y + 0.14, z, { cast: false });
+  const b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshBasicMaterial({ color: 0xFFE9A8 }));
+  b.position.set(x + 0.22, y + 0.03, z);
+  ROOT.add(b);
+  glow(b.position, 1.1, 0.42);
+}
+
+function buildRestoShell() {
+  const W = { wain: TEX.wainR, wall: TEX.wallR, rail: GOLD };
+  const floorMat = new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.floorR });
+  const slabMat = toon(WALNUT);
+  const slab = mesh(new THREE.BoxGeometry(11.8, 0.5, 9.8), [slabMat, slabMat, floorMat, slabMat, slabMat, slabMat], { cast: false });
+  slab.position.set(0, -0.25, 0);
+  ROOT.add(slab);
+  colBox(0, -0.25, 0, 5.9, 0.25, 4.9);
+  wallPiece(-5.7, 0, 0.4, 9.8, 0, WALL_H, W);
+  wallPiece(-1.05, -4.7, 9.7, 0.4, 0, WALL_H, W);
+  wallPiece(5.45, -4.7, 0.9, 0.4, 0, WALL_H, W);
+  wallPiece(4.4, -4.7, 1.2, 0.4, 2.5, WALL_H, W);
+  P(rbox(0.6, 0.18, 10.0, 0.07), DARKWOOD, -5.7, WALL_H + 0.06, 0, { cast: false });
+  P(rbox(12.0, 0.18, 0.6, 0.07), DARKWOOD, 0, WALL_H + 0.06, -4.7, { cast: false });
+  P(rbox(0.46, 0.05, 9.9, 0.02), GOLD, -5.62, WALL_H - 0.08, 0.05, { cast: false, outline: 'thin' });
+  P(rbox(11.9, 0.05, 0.46, 0.02), GOLD, 0.05, WALL_H - 0.08, -4.62, { cast: false, outline: 'thin' });
+  const bo = { group: GRP.BOUND };
+  colBox(6.15, 4.5, 0, 0.25, 4.5, 5.4, bo);
+  colBox(0, 4.5, 5.15, 6.4, 4.5, 0.25, bo);
+  colBox(-5.7, 7.0, 0, 0.2, 2.8, 5.4, bo);
+  colBox(0, 7.0, -4.7, 6.4, 2.8, 0.2, bo);
+  colBox(DOOR.x, 1.25, -4.7, 0.62, 1.25, 0.2, bo);
+  colBox(0, 9.9, 0, 6.4, 0.2, 5.4, bo);
+
+  // doorway with an evening view, and a dark wooden door
+  const outside = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 2.9), new THREE.MeshBasicMaterial({ map: TEX.night }));
+  outside.position.set(DOOR.x, 1.35, -5.5);
+  ROOT.add(outside);
+  P(rbox(1.5, 0.12, 0.9, 0.03), 0x6B6B6B, DOOR.x, -0.05, -5.25, { cast: false });
+  P(rbox(0.14, 2.64, 0.52, 0.04), DARKWOOD, 3.73, 1.32, -4.68);
+  P(rbox(0.14, 2.64, 0.52, 0.04), DARKWOOD, 5.07, 1.32, -4.68);
+  P(rbox(1.5, 0.16, 0.52, 0.04), DARKWOOD, DOOR.x, 2.58, -4.68);
+  P(rbox(1.52, 0.04, 0.54, 0.02), GOLD, DOOR.x, 2.67, -4.68, { outline: 'thin' });
+  DOOR.pivot = new THREE.Group();
+  DOOR.pivot.position.set(5.0, 0, -4.62);
+  ROOT.add(DOOR.pivot);
+  P(rbox(1.2, 2.46, 0.09, 0.03), 0x5A3624, -0.6, 1.24, 0, { parent: DOOR.pivot });
+  P(rbox(0.86, 0.86, 0.1, 0.03), 0x4A2C1C, -0.6, 0.62, 0.012, { parent: DOOR.pivot, outline: 'thin' });
+  P(new THREE.CylinderGeometry(0.24, 0.24, 0.11, 24), 0x9FB4D6, -0.6, 1.72, 0, { parent: DOOR.pivot, rx: Math.PI / 2 });
+  P(new THREE.TorusGeometry(0.25, 0.025, 6, 24), GOLD, -0.6, 1.72, 0.06, { parent: DOOR.pivot, outline: 'thin' });
+  P(new THREE.SphereGeometry(0.06, 12, 10), GOLD, -1.05, 1.15, 0.08, { parent: DOOR.pivot });
+  P(rbox(1.1, 0.03, 0.66, 0.01), VELVET, DOOR.x, 0.015, -4.05, { cast: false, outline: 'thin' });
+
+  // kitchen backsplash (white tiles)
+  P(rbox(6.9, 1.45, 0.04, 0.01), texMat(TEX.tiles, 7, 1.5), -2.05, 1.75, -4.47, { cast: false, outline: 'thin' });
+
+  // tall arched window with velvet drapes
+  const wx = 2.55, wy = 2.2, wz = -4.44;
+  P(rbox(1.6, 1.8, 0.12, 0.03), DARKWOOD, wx, wy, wz, { cast: false });
+  const pane = new THREE.Mesh(new THREE.PlaneGeometry(1.36, 1.6), new THREE.MeshBasicMaterial({ map: TEX.night }));
+  pane.position.set(wx, wy, wz + 0.065);
+  ROOT.add(pane);
+  const arch = new THREE.Mesh(new THREE.CircleGeometry(0.68, 28, 0, Math.PI), new THREE.MeshBasicMaterial({ map: TEX.night }));
+  arch.position.set(wx, wy + 0.8, wz + 0.065);
+  ROOT.add(arch);
+  P(new THREE.TorusGeometry(0.74, 0.07, 8, 28, Math.PI), DARKWOOD, wx, wy + 0.8, wz + 0.03, { cast: false });
+  P(rbox(0.04, 2.25, 0.04, 0.01), GOLD, wx, wy + 0.32, wz + 0.09, { outline: 'thin', cast: false });
+  P(rbox(1.36, 0.04, 0.04, 0.01), GOLD, wx, wy + 0.2, wz + 0.09, { outline: 'thin', cast: false });
+  P(rbox(1.9, 0.08, 0.3, 0.03), DARKWOOD, wx, wy - 0.92, wz + 0.12);
+  for (const sx of [-1, 1]) {
+    for (let k = 0; k < 3; k++) {
+      P(new THREE.CapsuleGeometry(0.08, 2.35, 4, 10), VELVET, wx + sx * (0.9 + k * 0.1), 2.3, wz + 0.22 - k * 0.03, { outline: k === 0 ? true : 'thin', cast: false });
+    }
+    P(new THREE.TorusGeometry(0.13, 0.025, 6, 16), GOLD, wx + sx * 1.0, 1.75, wz + 0.26, { outline: 'thin', cast: false });
+  }
+  P(new THREE.CylinderGeometry(0.025, 0.025, 2.7, 10), GOLD, wx, 3.86, wz + 0.2, { rz: Math.PI / 2, outline: 'thin', cast: false });
+  for (const sx of [-1, 1]) P(new THREE.SphereGeometry(0.05, 10, 8), GOLD, wx + sx * 1.37, 3.86, wz + 0.2, { outline: 'thin', cast: false });
+
+  // wall lights flanking the menu
+  sconce(-5.45, 2.95, -3.15);
+  sconce(-5.45, 2.95, 4.72);
+}
+
+function buildStove() {
+  const x0 = -4.7, x1 = -1.7, cx = (x0 + x1) / 2, L = x1 - x0, z = -3.98, d = 1.05, H = 1.0;
+  P(rbox(L, H - 0.06, d, 0.05), 0x2E2A2A, cx, (H - 0.06) / 2, z);
+  P(rbox(L + 0.06, 0.07, d + 0.04, 0.03), 0x4A4444, cx, H - 0.035, z);
+  for (const dx of [-0.72, 0.72]) {
+    P(rbox(1.25, 0.45, 0.05, 0.03), 0x3E3838, cx + dx, 0.38, z + d / 2 + 0.01, { outline: 'thin' });
+    P(rbox(0.7, 0.04, 0.05, 0.02), GOLD, cx + dx, 0.58, z + d / 2 + 0.05, { outline: 'thin' });
+  }
+  for (let i = 0; i < 6; i++) P(new THREE.CylinderGeometry(0.045, 0.045, 0.05, 12), GOLD, x0 + 0.3 + (i * (L - 0.6)) / 5, 0.8, z + d / 2 + 0.03, { rx: Math.PI / 2, outline: 'thin' });
+  P(new THREE.CylinderGeometry(0.025, 0.025, L - 0.1, 10), GOLD, cx, 0.9, z + d / 2 + 0.1, { rz: Math.PI / 2, outline: 'thin' });
+  colBox(cx, H / 2, z, L / 2, H / 2, d / 2);
+  // copper hood
+  const hood = P(new THREE.CylinderGeometry(0.75, 1.35, 0.9, 4).rotateY(Math.PI / 4), 0xC8783F, cx, 3.05, -4.05);
+  hood.scale.set(1.25, 1, 0.55);
+  P(rbox(2.45, 0.08, 1.08, 0.03), GOLD, cx, 2.62, -4.05, { outline: 'thin' });
+  P(rbox(0.8, 1.0, 0.5, 0.04), 0xB86A36, cx, 3.95, -4.25);
+  for (const px of [-3.95, -2.45]) PANS.push(buildPan(px, H, z));
+}
+function buildPan(x, y, z) {
+  const pan = { pos: V(x, y, z), slot: { pan: true, pos: V(x, y + 0.03, z), item: null }, contents: [], sig: '', busy: 0, match: null };
+  P(new THREE.TorusGeometry(0.42, 0.03, 6, 24), 0x1E1A1A, x, y + 0.01, z, { rx: Math.PI / 2, outline: false });
+  pan.flame = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.035, 6, 24).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x6FA8FF }));
+  pan.flame.position.set(x, y + 0.02, z);
+  pan.flame.visible = false;
+  ROOT.add(pan.flame);
+  pan.mesh = P(lathe([[0, 0], [0.44, 0], [0.5, 0.03], [0.54, 0.16], [0.56, 0.19], [0.52, 0.19], [0.49, 0.06], [0.42, 0.04], [0, 0.04]], 36), 0xC8783F, x, y + 0.03, z);
+  P(new THREE.CircleGeometry(0.47, 32), 0x3A2C28, x, y + 0.075, z, { rx: -Math.PI / 2, outline: false, cast: false });
+  P(rbox(0.08, 0.05, 0.55, 0.02), DARKWOOD, x, y + 0.2, z + 0.78, { rx: -0.2 });
+  pan.mesh.userData.action = 'pan';
+  pan.mesh.userData.pan = pan;
+  addPickable(pan.mesh);
+  pan.glow = glow(V(x, y + 0.15, z), 1.4, 0);
+  const parts = [[new CANNON.Cylinder(0.46, 0.46, 0.05, 14), [0, 0.055, 0]]];
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    parts.push([new CANNON.Box(new CANNON.Vec3(0.05, 0.3, 0.14)), [Math.cos(a) * 0.55, 0.3, Math.sin(a) * 0.55], new CANNON.Quaternion().setFromEuler(0, -a, 0)]);
+  }
+  colCompound(x, y + 0.03, z, parts);
+  pan.anchor = new Anchor('bub bowlb');
+  pan.anchor.pos.set(x, y + 1.1, z);
+  pan.anchor.show(false);
+  pan.ring = new Anchor('ring');
+  pan.ring.pos.set(x + 0.2, y + 0.75, z);
+  pan.ring.show(false);
+  return pan;
+}
+
+function buildRestoOven() {
+  const { xc, front } = OVEN, back = -4.5, d = front - back, W = 2.5, zc = (front + back) / 2;
+  const body = new THREE.Group();
+  ROOT.add(body);
+  const dark = 0x3A3434;
+  P(rbox(W, 0.9, d, 0.05), dark, xc, 0.45, zc, { parent: body });
+  for (const sx of [-1, 1]) P(rbox(0.25, 0.82, d, 0.04), dark, xc + sx * (W / 2 - 0.125), 1.31, zc, { parent: body });
+  P(rbox(W, 0.6, d, 0.06), dark, xc, 2.0, zc, { parent: body });
+  P(rbox(2.1, 0.06, 0.06, 0.02), GOLD, xc, 1.72, front + 0.02, { parent: body, outline: 'thin' });
+  P(rbox(2.1, 0.06, 0.06, 0.02), GOLD, xc, 0.9, front + 0.02, { parent: body, outline: 'thin' });
+  for (const sx of [-1, 1]) P(rbox(0.06, 0.86, 0.06, 0.02), GOLD, xc + sx * 1.03, 1.31, front + 0.02, { parent: body, outline: 'thin' });
+  P(rbox(1.96, 0.04, d - 0.1, 0.01), 0x9C5A3C, xc, 0.9, zc, { outline: false });
+  for (const sx of [-1, 1]) P(rbox(0.4, 0.06, 0.06, 0.02), GOLD, xc + sx * 0.6, 0.55, front + 0.03, { parent: body, outline: 'thin' });
+  OVEN.mesh = body;
+  OVEN.glowMat = new THREE.MeshBasicMaterial({ map: TEX.glow, color: 0x9A7A66 });
+  const gl = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 0.82), OVEN.glowMat);
+  gl.position.set(xc, 1.31, back + 0.14);
+  ROOT.add(gl);
+  // a chef's face with a curly mustache, and a chef hat on top
+  OVEN.face = new THREE.Group();
+  OVEN.face.position.set(xc, 2.05, front + 0.012);
+  ROOT.add(OVEN.face);
+  OVEN.eyeOpen = new THREE.Group(); OVEN.eyeHappy = new THREE.Group();
+  const eg = new THREE.SphereGeometry(0.075, 14, 10).scale(1, 1.3, 0.35);
+  const hg = new THREE.TorusGeometry(0.07, 0.022, 6, 14, Math.PI);
+  for (const sx of [-1, 1]) {
+    const e = new THREE.Mesh(eg, MAT.eye); e.position.set(sx * 0.3, 0.1, 0); OVEN.eyeOpen.add(e);
+    const h = new THREE.Mesh(hg, MAT.eye); h.position.set(sx * 0.3, 0.07, 0.01); OVEN.eyeHappy.add(h);
+    const b = new THREE.Mesh(new THREE.CircleGeometry(0.09, 18), MAT.blush); b.position.set(sx * 0.52, -0.04, 0.012); OVEN.face.add(b);
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10).scale(1.5, 0.45, 0.35), MAT.eye); m.position.set(sx * 0.13, -0.1, 0.01); m.rotation.z = sx * 0.28; OVEN.face.add(m);
+    const curl = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.014, 6, 12, Math.PI * 1.3), MAT.eye); curl.position.set(sx * 0.28, -0.05, 0.01); curl.rotation.z = sx > 0 ? -0.6 : Math.PI + 0.6; OVEN.face.add(curl);
+  }
+  OVEN.face.add(OVEN.eyeOpen, OVEN.eyeHappy);
+  OVEN.eyeHappy.visible = false;
+  const hat = new THREE.Group(); hat.position.set(xc, 2.3, zc + 0.15); ROOT.add(hat);
+  P(new THREE.CylinderGeometry(0.34, 0.32, 0.26, 24), 0xFFFDF8, 0, 0.13, 0, { parent: hat });
+  for (const [hx, hy, hz, r] of [[-0.22, 0.42, 0, 0.22], [0.22, 0.42, 0, 0.22], [0, 0.44, -0.15, 0.22], [0, 0.44, 0.15, 0.22], [0, 0.56, 0, 0.24]]) {
+    P(new THREE.SphereGeometry(r, 16, 12), 0xFFFDF8, hx, hy, hz, { parent: hat });
+  }
+  OVEN.light = new THREE.PointLight(0xFF9A3C, 0, 4.5, 1.6);
+  OVEN.light.position.set(xc, 1.35, front - 0.5);
+  ROOT.add(OVEN.light);
+  OVEN.slots = [-0.65, 0, 0.65].map((dx) => ({ oven: true, pos: V(xc + dx, 0.92, front - 0.42), item: null, ring: null }));
+  colBox(xc, 0.45, zc, W / 2, 0.45, d / 2);
+  for (const sx of [-1, 1]) colBox(xc + sx * (W / 2 - 0.125), 1.31, zc, 0.125, 0.41, d / 2);
+  colBox(xc, 2.0, zc, W / 2, 0.3, d / 2);
+  colBox(xc, 1.31, front + 0.02, 1.0, 0.41, 0.06);
+}
+
+function buildIsland() {
+  const x = -2.5, z = 2.0;
+  P(rbox(2.1, 0.9, 2.3, 0.05), WALNUT, x, 0.45, z);
+  P(rbox(0.05, 0.6, 1.9, 0.02), 0x6B4430, x + 1.06, 0.45, z, { outline: 'thin' });
+  P(rbox(1.7, 0.6, 0.05, 0.02), 0x6B4430, x, 0.45, z + 1.16, { outline: 'thin' });
+  P(rbox(2.2, 0.03, 2.4, 0.01), GOLD, x, 0.885, z, { outline: 'thin' });
+  P(rbox(2.25, 0.1, 2.45, 0.04), 0xF4F0E8, x, 0.95, z);
+  colBox(x, 0.5, z, 1.12, 0.5, 1.22);
+}
+
+function buildSideboard() {
+  const x = -5.17, z = -1.95;
+  P(rbox(0.6, 0.86, 2.4, 0.04), WALNUT, x, 0.43, z);
+  for (const dz of [-0.8, 0, 0.8]) {
+    P(rbox(0.05, 0.62, 0.72, 0.02), 0x6B4430, x + 0.3, 0.43, z + dz, { outline: 'thin' });
+    P(new THREE.SphereGeometry(0.035, 10, 8), GOLD, x + 0.34, 0.45, z + dz + 0.25, { outline: 'thin' });
+  }
+  P(rbox(0.66, 0.05, 2.46, 0.02), 0xF4F0E8, x, 0.885, z);
+  for (let i = 0; i < 4; i++) P(new THREE.CylinderGeometry(0.2, 0.17, 0.035, 24), 0xFFFDF8, x, 0.93 + i * 0.04, z - 0.8, { outline: 'thin' });
+  for (const [dz, c] of [[0.55, 0x2F5A3A], [0.72, 0x6B1F2A]]) {
+    P(new THREE.CylinderGeometry(0.06, 0.06, 0.28, 12), c, x - 0.05, 1.05, z + dz);
+    P(new THREE.CylinderGeometry(0.022, 0.03, 0.12, 8), c, x - 0.05, 1.25, z + dz, { outline: 'thin' });
+  }
+  for (const dz of [-0.2, 0.05, 0.3]) {
+    P(new THREE.CylinderGeometry(0.012, 0.012, 0.1, 6), 0xDDEFF2, x + 0.05, 0.96, z + dz, { outline: 'thin' });
+    P(new THREE.ConeGeometry(0.06, 0.1, 12).rotateX(Math.PI), 0xDDEFF2, x + 0.05, 1.06, z + dz, { outline: 'thin' });
+  }
+  colBox(x, 0.45, z, 0.3, 0.45, 1.2);
+  // framed menu above (click it for the recipes)
+  const board = new THREE.Group(); board.position.set(-5.44, 2.45, z); board.rotation.y = Math.PI / 2; ROOT.add(board);
+  P(rbox(1.62, 2.15, 0.08, 0.03), GOLD, 0, 0, 0, { parent: board, cast: false });
+  const menu = new THREE.Mesh(new THREE.PlaneGeometry(1.45, 1.93), new THREE.MeshToonMaterial({ color: 0xFFFFFF, gradientMap: GRAD, map: TEX.menuTex }));
+  menu.position.z = 0.045;
+  board.add(menu);
+  // brass picture lamp lighting the menu
+  for (const dz of [-0.3, 0.3]) P(new THREE.CylinderGeometry(0.018, 0.018, 0.26, 6), GOLD, -5.33, 3.6, z + dz, { rz: Math.PI / 2, outline: 'thin', cast: false });
+  P(new THREE.CylinderGeometry(0.07, 0.07, 0.95, 14), GOLD, -5.2, 3.6, z, { rx: Math.PI / 2, outline: 'thin', cast: false });
+  glow(V(-5.25, 3.25, z), 1.3, 0.3);
+  board.userData.action = 'book';
+  addPickable(board);
+  plant(-5.05, 0, -4.05, 1.1, ROOT, 0x2B2B2B);
+}
+
+function fancyChair(x, z, ry) {
+  const c = new THREE.Group(); c.position.set(x, 0, z); c.rotation.y = ry; ROOT.add(c);
+  P(rbox(0.46, 0.06, 0.46, 0.02), 0x4A2C1C, 0, 0.47, 0, { parent: c });
+  P(rbox(0.42, 0.08, 0.42, 0.04), VELVET, 0, 0.53, 0.01, { parent: c, outline: 'thin' });
+  for (const lx of [-0.19, 0.19]) for (const lz of [-0.19, 0.19]) P(rbox(0.05, 0.47, 0.05, 0.015), DARKWOOD, lx, 0.235, lz, { parent: c, outline: 'thin' });
+  for (const lx of [-0.19, 0.19]) P(rbox(0.05, 0.62, 0.05, 0.015), DARKWOOD, lx, 0.8, -0.2, { parent: c, outline: 'thin' });
+  P(rbox(0.36, 0.42, 0.07, 0.05), VELVET, 0, 0.84, -0.2, { parent: c });
+  P(rbox(0.46, 0.06, 0.06, 0.02), 0x4A2C1C, 0, 1.12, -0.2, { parent: c });
+  colBox(x, 0.28, z, 0.23, 0.28, 0.23);
+}
+function buildTables() {
+  for (const t of TABLES) {
+    const g = new THREE.Group(); g.position.set(t.x, 0, t.z); ROOT.add(g);
+    P(new THREE.CylinderGeometry(0.12, 0.18, 0.06, 16), DARKWOOD, 0, 0.03, 0, { parent: g });
+    P(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 10), DARKWOOD, 0, 0.3, 0, { parent: g });
+    P(new THREE.CylinderGeometry(0.6, 0.66, 0.36, 32), 0xFFFDF8, 0, 0.63, 0, { parent: g });
+    P(new THREE.CylinderGeometry(0.61, 0.61, 0.035, 32), 0xFFFDF8, 0, 0.815, 0, { parent: g });
+    P(new THREE.CylinderGeometry(0.03, 0.045, 0.18, 12), 0xDDEFF2, 0.32, 0.92, 0.14, { parent: g, outline: 'thin' });
+    P(new THREE.CylinderGeometry(0.008, 0.008, 0.16, 5), 0x5E9B45, 0.32, 1.06, 0.14, { parent: g, outline: false });
+    P(new THREE.SphereGeometry(0.05, 12, 10), 0xC8303F, 0.32, 1.15, 0.14, { parent: g, outline: 'thin' });
+    for (const cx of [-0.3, 0.3]) P(rbox(0.04, 0.012, 0.22, 0.005), 0xC9CFD4, cx, 0.838, -0.3, { parent: g, outline: 'thin' });
+    // candles (upgrade)
+    t.candles = new THREE.Group(); g.add(t.candles);
+    for (const cx of [-0.34, -0.16]) {
+      P(new THREE.CylinderGeometry(0.035, 0.05, 0.05, 12), GOLD, cx, 0.86, 0.24, { parent: t.candles, outline: 'thin' });
+      P(new THREE.CylinderGeometry(0.022, 0.022, 0.2, 10), 0xFFF8E8, cx, 0.98, 0.24, { parent: t.candles, outline: 'thin' });
+      const f = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.06, 8), new THREE.MeshBasicMaterial({ color: 0xFFC24A }));
+      f.position.set(cx, 1.11, 0.24); f.userData.seed = cx * 10; t.candles.add(f);
+      RDECOR.flames.push(f);
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.puff, color: 0xFFC76B, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
+      halo.position.set(cx, 1.11, 0.24); halo.scale.setScalar(0.5); halo.renderOrder = 8; t.candles.add(halo);
+    }
+    fancyChair(t.x, t.z - 1.0, 0);
+    fancyChair(t.x - 0.95, t.z + 0.05, Math.PI / 2);
+    colCompound(t.x, 0.41, t.z, [[new CANNON.Cylinder(0.62, 0.62, 0.82, 16), [0, 0, 0]]]);
+  }
+}
+
+function buildRestoDecor() {
+  P(rbox(4.8, 0.02, 5.8, 0.01), texMat(TEX.redRug, 1, 1), 2.65, 0.012, 0.25, { outline: 'thin', cast: false });
+  plant(1.9, 0, 4.45, 1.6, ROOT, 0x2B2B2B);
+  plant(5.35, 0, -3.95, 1.4, ROOT, 0x2B2B2B);
+  // gramophone (upgrade)
+  const gph = new THREE.Group(); gph.position.set(5.1, 0, 4.1); ROOT.add(gph);
+  P(new THREE.CylinderGeometry(0.32, 0.32, 0.05, 20), WALNUT, 0, 0.72, 0, { parent: gph });
+  P(new THREE.CylinderGeometry(0.05, 0.08, 0.7, 10), DARKWOOD, 0, 0.35, 0, { parent: gph });
+  P(rbox(0.36, 0.14, 0.36, 0.03), 0x6B4430, 0, 0.82, 0, { parent: gph });
+  P(new THREE.CylinderGeometry(0.15, 0.15, 0.02, 20), 0x2B2B2B, 0, 0.9, 0, { parent: gph, outline: 'thin' });
+  P(new THREE.CylinderGeometry(0.015, 0.015, 0.35, 6), GOLD, 0.1, 1.05, -0.05, { parent: gph, rz: 0.4, outline: 'thin' });
+  P(new THREE.ConeGeometry(0.22, 0.42, 20), GOLD, 0.02, 1.32, -0.12, { parent: gph, rx: Math.PI + 0.5, rz: 0.4 });
+  colBox(5.1, 0.45, 4.1, 0.32, 0.45, 0.32);
+  RDECOR.gramophone = gph;
+  RDECOR.noteAt = V(5.05, 1.6, 3.95);
+  // a golden star review above the door (upgrade)
+  const star = new THREE.Group(); star.position.set(DOOR.x, 3.4, -4.43); ROOT.add(star);
+  P(rbox(1.0, 0.56, 0.06, 0.03), GOLD, 0, 0, 0, { parent: star });
+  P(rbox(0.9, 0.46, 0.07, 0.02), DARKWOOD, 0, 0, 0.005, { parent: star, outline: false });
+  const sh = new THREE.Shape();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5, r = i % 2 ? 0.08 : 0.19;
+    if (i === 0) sh.moveTo(Math.cos(a) * r, -Math.sin(a) * r); else sh.lineTo(Math.cos(a) * r, -Math.sin(a) * r);
+  }
+  P(new THREE.ExtrudeGeometry(sh, { depth: 0.04, bevelEnabled: false }), 0xF6C744, 0, 0, 0.04, { parent: star, outline: 'thin' });
+  RDECOR.star = star;
+}
+
+function buildResto() {
+  buildRestoShell();
+  buildStove();
+  buildRestoOven();
+  buildPantry(PANTRY_R, SOURCES_R, PANTRY_WALNUT, false);
+  buildSources(SOURCES_R);
+  buildIsland();
+  buildBowl(GOLD);
+  buildTrash(0xC9A24E, 0x8A6A2E);
+  buildSideboard();
+  buildTables();
+  buildRestoDecor();
+  bowlZone();
+  ovenZone(new THREE.BoxGeometry(2.7, 2.2, 1.2), OVEN.xc, 1.45, OVEN.front - 0.1);
+  for (const pan of PANS) panZone(pan);
+  trashZone();
+  BOWL.anchor = new Anchor('bub bowlb');
+  BOWL.anchor.pos.set(BOWL.pos.x, BOWL.pos.y + 1.2, BOWL.pos.z);
+  BOWL.anchor.show(false);
+}
+
+/* ---------- pans on the stove: drop ingredients in, press Cook, take it off before it burns ---------- */
+function panItems(pan) {
+  const out = [];
+  for (const it of items) {
+    if (it.location !== 'world' || it.info.type !== 'ingredient') continue;
+    const p = it.body.position, dx = p.x - pan.pos.x, dz = p.z - pan.pos.z;
+    if (dx * dx + dz * dz < 0.5 * 0.5 && p.y > pan.pos.y && p.y < pan.pos.y + 1.2) out.push(it);
+  }
+  return out;
+}
+function panZone(pan) {
+  makeZone(new THREE.CylinderGeometry(0.7, 0.7, 1.4, 16), pan.pos.x, pan.pos.y + 0.7, pan.pos.z, {
+    visual: pan.mesh,
+    accepts: (it) => !pan.slot.item && pan.busy <= 0 && (it.info.type === 'ingredient' || (!!it.info.plated && it.state !== 'burnt')),
+    drop: (it) => {
+      if (it.info.plated) { putInPan(pan, it); return true; }
+      const p = it.body.position;
+      it.body.velocity.set((pan.pos.x - p.x) * 2.2, -1, (pan.pos.z - p.z) * 2.2);
+      it.body.angularVelocity.scale(0.3, it.body.angularVelocity);
+      Sound.plop();
+      return true;
+    },
+    snap: (it) => {
+      let top = pan.pos.y + 0.25;
+      for (const o of pan.contents) top = Math.max(top, o.body.position.y + o.radius);
+      return V(pan.pos.x, top + 0.3 + it.radius, pan.pos.z);
+    },
+  });
+}
+function putInPan(pan, it) {
+  it.removeBody();
+  it.location = 'anim';
+  it.slot = pan.slot;
+  pan.slot.item = it;
+  showPlate(it, false);
+  const from = it.mesh.position.clone(), q0 = it.mesh.quaternion.clone(), q1 = new THREE.Quaternion();
+  const to = V(pan.pos.x, pan.pos.y + 0.12, pan.pos.z);
+  tween(0.3, (k) => {
+    const e = smooth(k);
+    it.mesh.position.lerpVectors(from, to, e);
+    it.mesh.position.y += Math.sin(k * Math.PI) * 0.25;
+    it.mesh.quaternion.slerpQuaternions(q0, q1, e);
+  }, () => { if (it.slot === pan.slot) it.location = 'pan'; });
+  Sound.sizzle();
+}
+function startCook(pan) {
+  if (!pan || !pan.match || pan.busy > 0 || pan.slot.item) return;
+  const rec = pan.match;
+  pan.busy = 0.5;
+  for (const it of pan.contents) {
+    it.removeBody();
+    it.location = 'anim';
+    const from = it.mesh.position.clone(), to = V(pan.pos.x, pan.pos.y + 0.15, pan.pos.z);
+    tween(0.3, (k) => { it.mesh.position.lerpVectors(from, to, smooth(k)); it.mesh.scale.setScalar(ITEM_S * (1 - 0.8 * k)); }, () => destroyItem(it));
+  }
+  pan.contents = []; pan.match = null; pan.sig = '';
+  pan.anchor.show(false);
+  const dish = new Item(rec.makes, pan.pos.x, pan.pos.y + 0.5, pan.pos.z);
+  putInPan(pan, dish);
+  puffs(V(pan.pos.x, pan.pos.y + 0.3, pan.pos.z), 6, 0xFFFFFF, 0.5);
+}
+function tipPan(pan) {
+  if (!pan) return;
+  for (const it of pan.contents) {
+    it.body.wakeUp();
+    it.body.velocity.set(rand(-0.8, 0.8), 6, rand(2.2, 3.2));
+    it.body.angularVelocity.set(rand(-6, 6), rand(-6, 6), rand(-6, 6));
+  }
+  Sound.whoosh();
+}
+function ringUpdate(ring, p) {
+  let cls = 'ring', c = '#F4A646', txt = '', fill = Math.min(1, p);
+  if (p >= BURN_AT) { c = '#4B2E1D'; txt = '✗'; fill = 1; }
+  else if (p >= 1.5) { c = '#E0584C'; txt = '!'; cls = 'ring warn'; fill = 1; }
+  else if (p >= 1) { c = '#74B35A'; txt = '✓'; fill = 1; }
+  ring.setClass(cls).set(`<span>${txt}</span>`).show(true);
+  ring.inner.style.setProperty('--c', c);
+  ring.inner.style.setProperty('--p', fill.toFixed(3));
+}
+function updatePans(dt) {
+  PANS.forEach((pan, i) => {
+    pan.busy = Math.max(0, pan.busy - dt);
+    const it = pan.slot.item;
+    const cooking = !!it && it.location === 'pan';
+    pan.flame.visible = cooking;
+    pan.glow.material.opacity = damp(pan.glow.material.opacity, cooking ? 0.35 : 0, 5, dt);
+    if (it) {
+      pan.anchor.show(false);
+      if (!cooking) return;
+      const before = it.progress;
+      it.progress += dt / (it.info.bake * stoveMult());
+      const p = it.progress;
+      if (before < 1 && p >= 1) { Sound.ding(); sparkles(V(pan.pos.x, pan.pos.y + 0.4, pan.pos.z), 5); }
+      if (before < BURN_AT && p >= BURN_AT) { Sound.sad(); puffs(it.mesh.position, 6, 0x6E625A, 0.4); }
+      if (p >= BURN_AT && Math.random() < dt * 3) smoke(it.mesh.position);
+      else if (Math.random() < dt * 3) particle(TEX.puff, V(pan.pos.x + rand(-0.25, 0.25), pan.pos.y + 0.3, pan.pos.z + rand(-0.25, 0.25)), { vel: V(0, rand(0.4, 0.7), 0), life: 1.1, size: 0.18, grow: 2.4, color: 0xFFFFFF, opacity: 0.45 });
+      if (Math.random() < dt * 0.9) Sound.sizzle();
+      it.mesh.position.y = pan.pos.y + 0.12 + Math.abs(Math.sin(T * 8 + i)) * 0.012;
+      it.applyBake();
+      ringUpdate(pan.ring, p);
+      return;
+    }
+    pan.ring.show(false);
+    pan.contents = panItems(pan);
+    const st = mixState(pan.contents, LV.recipes.filter((r) => r.station === 'stove'));
+    pan.match = st.match;
+    if (st.sig !== pan.sig) { pan.sig = st.sig; pan.anchor.set(mixHtml(st, `cook:${i}`, `tipPan:${i}`, 'Cook!')); }
+    pan.anchor.show(st.any);
+  });
+}
+
+/* ---------- seated guests ---------- */
+const R_DOOR_IN = -3.9, R_OUT = -5.3, R_LANE_BACK = -2.75, R_LANE_MID = 0.35, R_LANE_X = 5.25;
+function dressUp(m) {
+  if (Math.random() < 0.55) {
+    const c = pick([0x2B2B3A, VELVET, 0x2F4A3B]);
+    for (const sx of [-1, 1]) {
+      const b = P(new THREE.ConeGeometry(0.06, 0.12, 4), c, sx * 0.065, 0.6, 0.2, { parent: m.g, outline: 'thin' });
+      b.rotation.z = sx * Math.PI / 2;
+    }
+    P(new THREE.SphereGeometry(0.03, 8, 6), c, 0, 0.6, 0.22, { parent: m.g, outline: 'thin' });
+  } else {
+    for (let i = 0; i < 9; i++) {
+      const a = Math.PI * (0.15 + (0.7 * i) / 8);
+      P(new THREE.SphereGeometry(0.028, 8, 6), 0xFFFBF2, Math.cos(a) * 0.19, 0.585 - Math.sin(a) * 0.03, Math.sin(a) * 0.19, { parent: m.g, outline: 'thin' });
+    }
+  }
+}
+class Guest {
+  constructor(table, order) {
+    this.table = table; table.guest = this;
+    this.order = order;
+    this.type = pick(CUST_TYPES);
+    this.m = buildCustomerMesh(this.type);
+    dressUp(this.m);
+    this.g = this.m.g;
+    ROOT.add(this.g);
+    this.pos = V(DOOR.x, 0, R_OUT);
+    const seat = V(table.x, 0, table.z - 0.92);
+    this.path = table.row === 0
+      ? [V(DOOR.x, 0, R_DOOR_IN), V(table.x, 0, R_LANE_BACK), seat]
+      : [V(DOOR.x, 0, R_DOOR_IN), V(R_LANE_X, 0, R_LANE_BACK), V(R_LANE_X, 0, R_LANE_MID), V(table.x, 0, R_LANE_MID), seat];
+    this.state = 'enter';
+    this.wait = 0;
+    this.patience = rand(70, 85) * patienceMult();
+    this.yaw = Math.PI; this.t = rand(0, 10); this.sit = 0;
+    this.moodT = 0; this.sayT = 0; this.hop = 0; this.blinkT = rand(1, 4); this.bonkT = -9; this.eatT = 0;
+    this.body = new CANNON.Body({ mass: 0, type: CANNON.Body.KINEMATIC, collisionFilterGroup: GRP.CUST, collisionFilterMask: MASK.CUST });
+    this.body.addShape(new CANNON.Sphere(0.42 * CUST_S), new CANNON.Vec3(0, 0.95 * CUST_S, 0));
+    this.body.position.set(this.pos.x, 0, this.pos.z);
+    this.body.userData = { customer: this };
+    world.addBody(this.body);
+    this.bubble = new Anchor('bub order');
+    this.bubble.show(false);
+    this.zoneRoot = new THREE.Group();
+    this.zoneRoot.position.set(table.x, 0, table.z);
+    ROOT.add(this.zoneRoot);
+    this.zone = makeZone(new THREE.BoxGeometry(1.5, 2.0, 2.1), 0, 1.0, -0.4, {
+      visual: this.g,
+      accepts: (it) => this.state === 'wait' && it.kind === this.order,
+      drop: (it) => this.receive(it),
+      snap: (it) => V(table.x, 0.83 + 0.4 + it.radius, table.z - 0.2),
+    }, this.zoneRoot);
+    customers.push(this);
+    Sound.bell();
+  }
+  receive(it) {
+    if (this.state !== 'wait') return false;
+    if (it.kind !== this.order) { this.say(pick(["That's not what I ordered.", 'Pardon? Not that one.'])); this.setMood('sad', 1.4); Sound.sad(); return false; }
+    if (it.state === 'raw') { this.say("It isn't cooked yet!"); this.setMood('sad', 1.4); Sound.sad(); return false; }
+    if (it.state === 'burnt') { this.say('Oh dear, it’s burnt!'); this.setMood('sad', 1.4); Sound.sad(); return false; }
+    this.serve(it);
+    return true;
+  }
+  serve(it) {
+    this.state = 'eat';
+    this.eatT = 4;
+    it.removeBody();
+    it.location = 'anim';
+    this.dish = it;
+    const from = it.mesh.position.clone(), q0 = it.mesh.quaternion.clone(), q1 = new THREE.Quaternion();
+    const to = V(this.table.x, 0.835 + it.rest, this.table.z - 0.3);
+    tween(0.4, (k) => {
+      const e = smooth(k);
+      it.mesh.position.lerpVectors(from, to, e);
+      it.mesh.position.y += Math.sin(k * Math.PI) * 0.3;
+      it.mesh.quaternion.slerpQuaternions(q0, q1, e);
+    });
+    const rec = ALL_RECIPES.find((r) => r.sells === this.order);
+    const base = Math.round(rec.price * priceMult());
+    const tip = Math.round(base * 0.4 * clamp(1 - this.wait / this.patience, 0, 1));
+    this.payTotal = base + tip;
+    this.setMood('happy', 99);
+    this.hop = 0.6;
+    this.say(pick(['Magnifique!', 'Délicieux!', 'Exquisite!', 'Bravo, chef!']), 1.6);
+    hearts(V(this.pos.x, 2.0, this.pos.z), 4);
+    Sound.yay();
+    state.served++;
+    state.servedR = (state.servedR || 0) + 1;
+    save();
+  }
+  pay() {
+    spawnCoinsAt(V(this.table.x, 1.2, this.table.z - 0.1), this.payTotal);
+    floatText(`+${this.payTotal}`, V(this.pos.x, 2.6, this.pos.z));
+    if (this.dish) { sparkles(this.dish.mesh.position, 5); destroyItem(this.dish); this.dish = null; }
+    this.leave(true);
+  }
+  leave(happy) {
+    if (this.state === 'leave') return;
+    const wasWaiting = this.state === 'wait';
+    this.state = 'leave';
+    this.table.guest = null;
+    if (!happy && wasWaiting) { this.setMood('sad', 99); this.say(pick(['I shall dine elsewhere.', 'Hmph! Too slow.']), 1.8); Sound.sad(); }
+    else if (this.sayT <= 0) this.bubble.show(false);
+    const t = this.table;
+    this.path = t.row === 0
+      ? [V(t.x, 0, R_LANE_BACK), V(DOOR.x, 0, R_DOOR_IN), V(DOOR.x, 0, R_OUT)]
+      : [V(t.x, 0, R_LANE_MID), V(R_LANE_X, 0, R_LANE_MID), V(R_LANE_X, 0, R_LANE_BACK), V(DOOR.x, 0, R_DOOR_IN), V(DOOR.x, 0, R_OUT)];
+  }
+  remove() {
+    this.g.removeFromParent();
+    this.zoneRoot.removeFromParent();
+    world.removeBody(this.body);
+    this.bubble.destroy();
+    const zi = zones.indexOf(this.zone.mesh);
+    if (zi >= 0) zones.splice(zi, 1);
+    if (hold.zone === this.zone) hold.zone = null;
+    if (this.dish) destroyItem(this.dish);
+    customers.splice(customers.indexOf(this), 1);
+  }
+  update(dt) {
+    this.t += dt;
+    let moving = false;
+    if (this.state === 'enter' || this.state === 'leave') {
+      const tgt = this.path[0];
+      if (tgt && this.sit < 0.05) {
+        const dx = tgt.x - this.pos.x, dz = tgt.z - this.pos.z, dist = Math.hypot(dx, dz);
+        if (dist < 0.04) this.path.shift();
+        else {
+          const step = Math.min(dist, 1.9 * dt);
+          this.pos.x += (dx / dist) * step;
+          this.pos.z += (dz / dist) * step;
+          this.yaw = dampAngle(this.yaw, Math.atan2(dx, dz), 10, dt);
+          moving = true;
+        }
+      }
+      if (!this.path.length) {
+        if (this.state === 'enter') { this.state = 'wait'; this.showOrder(); }
+        else { this.remove(); return; }
+      }
+    } else if (this.state === 'wait') {
+      this.yaw = dampAngle(this.yaw, 0.35, 6, dt);
+      this.wait += dt;
+      if (this.wait >= this.patience) this.leave(false);
+    } else if (this.state === 'eat') {
+      this.yaw = dampAngle(this.yaw, 0.2, 6, dt);
+      this.eatT -= dt;
+      if (this.eatT <= 0) this.pay();
+    }
+    const seated = this.state === 'wait' || this.state === 'eat';
+    this.sit = damp(this.sit, seated ? 1 : 0, 7, dt);
+    if (this.sayT > 0) {
+      this.sayT -= dt;
+      if (this.sayT <= 0) { if (this.state === 'wait') this.showOrder(); else this.bubble.show(false); }
+    }
+    if (this.patEl && this.state === 'wait') {
+      const left = clamp(1 - this.wait / this.patience, 0, 1), shown = Math.round(left * 100);
+      if (shown !== this.patShown) {
+        this.patShown = shown;
+        this.patEl.style.width = `${shown}%`;
+        this.patEl.style.background = left > 0.5 ? '#74B35A' : left > 0.25 ? '#F4A646' : '#E0584C';
+      }
+    }
+    if (this.moodT > 0) { this.moodT -= dt; if (this.moodT <= 0) this.setMood('neutral'); }
+    this.blinkT -= dt;
+    if (this.blinkT < -0.12) this.blinkT = rand(2, 5);
+    this.m.eyes.scale.y = this.blinkT < 0 ? 0.15 : 1;
+    this.hop = Math.max(0, this.hop - dt * 2.5);
+    const bob = moving ? Math.abs(Math.sin(this.t * 10)) * 0.07 : 0;
+    const nibble = this.state === 'eat' ? Math.abs(Math.sin(this.t * 7)) * 0.04 : 0;
+    this.g.position.set(this.pos.x, bob + this.sit * 0.12 + Math.sin(this.hop * Math.PI) * 0.2, this.pos.z);
+    this.m.head.position.y = 0.95 - nibble;
+    this.g.rotation.y = this.yaw;
+    this.g.scale.set(CUST_S, CUST_S * (1 + Math.sin(this.t * 2.4) * 0.015), CUST_S);
+    const swing = moving ? Math.sin(this.t * 10) * 0.5 : 0;
+    this.m.arms[0].rotation.x = this.state === 'eat' ? -0.8 - Math.abs(Math.sin(this.t * 7)) * 0.5 : swing;
+    this.m.arms[1].rotation.x = -swing;
+    this.m.arms[1].rotation.z = this.m.happy.visible && this.state !== 'eat' ? 2.4 + Math.sin(this.t * 14) * 0.35 : 0.35;
+    this.body.position.set(this.pos.x, this.sit * 0.12, this.pos.z);
+    this.bubble.pos.set(this.pos.x, this.type === 'bunny' ? 2.75 : 2.45, this.pos.z);
+  }
+}
+for (const k of ['showOrder', 'say', 'setMood', 'onHit']) Guest.prototype[k] = Customer.prototype[k];
+
+function spawnCoinsAt(pos, total) {
+  const n = clamp(Math.ceil(total / 5), 2, 8);
+  let left = total;
+  for (let i = 0; i < n; i++) {
+    const v = i === n - 1 ? left : Math.floor(total / n);
+    left -= v;
+    const c = new Item('coin', pos.x + rand(-0.15, 0.15), pos.y + i * 0.05, pos.z + rand(-0.15, 0.15));
+    c.value = v;
+    c.body.velocity.set(rand(-1.2, 1.2), rand(2.5, 3.5), rand(-0.6, 1.2));
+    c.body.angularVelocity.set(rand(-8, 8), rand(-8, 8), rand(-8, 8));
+    c.collectAt = T + 1.1 + i * 0.08;
+  }
+}
+
+let rSpawnT = 2.5;
+function updateRestoSpawner(dt) {
+  if (!started) return;
+  rSpawnT -= dt;
+  if (rSpawnT > 0) return;
+  const active = customers.filter((c) => c.state !== 'leave').length;
+  const sr = state.servedR || 0;
+  const cap = sr < 4 ? 1 : sr < 10 ? 2 : sr < 20 ? 3 : 4;
+  const free = TABLES.filter((t) => !t.guest);
+  if (active >= cap || !free.length) { rSpawnT = rand(5, 9); return; }
+  const menu = RECIPES_R.filter(recipeKnown).map((r) => r.sells);
+  new Guest(pick(free), pick(menu));
+  rSpawnT = rand(22, 32) * spawnMult();
+}
+function updateResto(dt) {
+  if (restoHintT && T > restoHintT) { restoHintT = 0; hideHint(); state.restoIntro = true; save(); }
+  if (has('candles')) for (const f of RDECOR.flames) f.scale.set(1, 1 + Math.sin(T * 13 + f.userData.seed) * 0.2, 1);
+  if (RDECOR.gramophone.visible && Math.random() < dt * 0.8) {
+    particle(TEX.note, RDECOR.noteAt.clone(), { vel: V(rand(-0.25, 0.1), 0.5, rand(-0.1, 0.25)), life: 2, size: 0.24, grow: 1.2 });
+  }
+}
+
+/* =====================================================================
+   Levels: the bakery and the restaurant live side by side; only one is shown and simulated
+   ===================================================================== */
+const LEVELS = {};
+let LV = null;
+function makeLevel(id, cfg) {
+  const lv = Object.assign({
+    id, root: new THREE.Group(), world: makeWorld(), items: new Set(), pickables: [], zones: [],
+    customers: [], sources: [], labels: document.createElement('div'),
+  }, cfg);
+  labelsEl.appendChild(lv.labels);
+  scene.add(lv.root);
+  LEVELS[id] = lv;
+  return lv;
+}
+// Point the shared handles (world, items, OVEN, BOWL...) at a level
+function bindLevel(lv) {
+  LV = lv; ROOT = lv.root; world = lv.world; items = lv.items; pickables = lv.pickables; zones = lv.zones;
+  customers = lv.customers; sources = lv.sources;
+  OVEN = lv.oven; BOWL = lv.bowl; TRASH = lv.trash; DOOR = lv.door;
+}
+
 /* =====================================================================
    Camera layout
    ===================================================================== */
@@ -3725,13 +4831,19 @@ function tick(dt) {
   updateTrash();
   updateCoins();
   for (const c of customers.slice()) c.update(dt);
-  updateSpawner(dt);
   updateDoor(dt);
-  updateCat(dt);
+  if (LV.id === 'bakery') {
+    updateSpawner(dt);
+    updateCat(dt);
+    updateTutorial();
+    updateFairy();
+  } else {
+    updatePans(dt);
+    updateRestoSpawner(dt);
+    updateResto(dt);
+  }
   updateTweens(dt);
   updateParticles(dt);
-  updateTutorial();
-  updateFairy();
 }
 function frame(now) {
   requestAnimationFrame(frame);
@@ -3741,19 +4853,46 @@ function frame(now) {
   updateClock();
   updateHover();
   updateHUD();
-  for (const a of anchors) a.update();
+  for (const a of anchors) if (a.lv === LV) a.update();
   renderer.render(scene, camera);
 }
 
-function startGame() {
+function startGame(id) {
   if (started) return;
   started = true;
   Sound.init();
   Sound.pop();
   $('start').classList.add('hidden');
   spawnT = state.tutorialDone ? 2.5 : 1.2;
+  goTo(id, true);
+}
+// Switch between the bakery and the restaurant (each keeps its own items and customers)
+let restoHintT = 0;
+function goTo(id, force = false) {
+  const lv = LEVELS[id];
+  if (!lv || (lv === LV && !force)) return;
+  if (hold.item) release(true);
+  setHover(null); showTip(''); closePanels(); hideHint(); pointArrow(null);
+  for (const L of Object.values(LEVELS)) {
+    L.root.visible = L === lv;
+    L.labels.style.display = L === lv ? '' : 'none';
+  }
+  bindLevel(lv);
+  document.body.dataset.world = id;
+  $('worldBtn').innerHTML = id === 'bakery' ? '🍷 <span class="lbl">Restaurant</span>' : '🥐 <span class="lbl">Bakery</span>';
+  $('worldBtn').title = id === 'bakery' ? 'Go to the restaurant' : 'Go to the bakery';
+  if (!started) return;
+  state.world = id;
+  save();
   refreshSources();
   updateShopBadge();
+  if (id === 'resto') {
+    if (!customers.length) rSpawnT = Math.min(rSpawnT, 2.5);
+    if (!state.restoIntro) {
+      showHint('Welcome to <b>Maison Hillside</b>! Mains cook in the <b>pans</b>, desserts are mixed in the <b>bowl</b> and baked. Carry each dish to the guest\'s table.');
+      restoHintT = T + 14;
+    }
+  }
 }
 
 async function boot() {
@@ -3765,6 +4904,16 @@ async function boot() {
   } catch (e) { /* fall back to a system font */ }
   makeTextures();
   initModels();
+  buildArrow();
+  buildMarker();
+  // the bakery
+  bindLevel(makeLevel('bakery', {
+    recipes: RECIPES, upgrades: UPGRADES,
+    oven: { zc: -2.4, front: -3.74, slots: [], dir: 'x', floor: 1.0 },
+    bowl: { pos: V(-2.1, 1.0, 1.45), contents: [], mixing: 0, sig: '' },
+    trash: { pos: V(-0.35, 0, 3.75) },
+    door: { x: 4.4, angle: 0 },
+  }));
   buildShell();
   buildOven();
   buildPantry();
@@ -3777,35 +4926,47 @@ async function boot() {
   buildDecor();
   buildCat();
   buildZones();
-  buildArrow();
-  buildMarker();
   BOWL.anchor = new Anchor('bub bowlb');
   BOWL.anchor.pos.set(BOWL.pos.x, BOWL.pos.y + 1.2, BOWL.pos.z);
   BOWL.anchor.show(false);
+  // the restaurant
+  bindLevel(makeLevel('resto', {
+    recipes: RECIPES_R, upgrades: UPGRADES_R,
+    oven: { xc: 0.05, zc: -3.85, front: -3.2, slots: [], dir: 'z', floor: 0.92 },
+    bowl: { pos: V(-2.5, 1.0, 2.0), contents: [], mixing: 0, sig: '' },
+    trash: { pos: V(-0.95, 0, 3.85) },
+    door: { x: 4.4, angle: 0 },
+  }));
+  buildResto();
   makeIcons();
-  await Promise.all(RECIPES.map((rec) => {
+  await Promise.all(ALL_RECIPES.map((rec) => {
     const img = new Image();
     img.src = ICON[rec.sells];
     ICON_IMG[rec.sells] = img;
     return img.decode().catch(() => {});
   }));
   $('servedIcon').src = ICON.toast;
+  goTo(state.world === 'resto' ? 'resto' : 'bakery', true);
   applyProgress();
   resize();
   window.addEventListener('resize', resize);
   requestAnimationFrame(frame);
-  const btn = $('startBtn');
-  btn.disabled = false;
-  btn.textContent = state.served > 0 || state.coins > 0 ? 'Keep baking!' : 'Start baking!';
-  btn.addEventListener('click', startGame);
+  const btn = $('startBtn'), btnR = $('startResto');
+  btn.disabled = false; btnR.disabled = false;
+  btn.textContent = '🥐 Bakery';
+  btnR.textContent = '🍷 Restaurant';
+  btn.addEventListener('click', () => startGame('bakery'));
+  btnR.addEventListener('click', () => startGame('resto'));
 }
 // Handy for testing: open the page with ?debug to poke at the game from the console
 if (location.search.includes('debug')) {
   window.hb = {
-    state, items, customers, sources, BOWL, OVEN, TRASH, hold, view, camera, world, renderer, scene, pointer,
+    state, hold, view, camera, renderer, scene, pointer, LEVELS, goTo, PANS, TABLES,
     Item, grab, release, startMix, toScreen, SPOTS, V, layoutCamera, applyProgress, CANNON, THREE, raycaster, T: () => T,
     advance(sec) { for (let t = 0; t < sec; t += 1 / 60) tick(1 / 60); },
   };
+  for (const [k, get] of Object.entries({ items: () => items, customers: () => customers, sources: () => sources, BOWL: () => BOWL,
+    OVEN: () => OVEN, TRASH: () => TRASH, world: () => world, LV: () => LV })) Object.defineProperty(window.hb, k, { get });
 }
 
 boot().catch((err) => {
